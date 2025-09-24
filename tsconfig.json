@@ -1,0 +1,27 @@
+{
+    "compilerOptions": {
+        "target": "ES2020",
+        "useDefineForClassFields": true,
+        "module": "ESNext",
+        "lib": [
+            "ES2020",
+            "DOM"
+        ],
+        "moduleResolution": "bundler",
+        "strict": true,
+        "resolveJsonModule": true,
+        "isolatedModules": true,
+        "noEmit": true,
+        "skipLibCheck": true,
+        "types": [
+            "svelte",
+            "chrome"
+        ]
+    },
+    "include": [
+        "src/**/*.ts",
+        "src/**/*.svelte",
+        "index.html",
+        "options.html"
+    ]
+}
