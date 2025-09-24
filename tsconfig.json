@@ -1,27 +1,23 @@
 {
+    "extends": "@tsconfig/svelte/tsconfig.json",
     "compilerOptions": {
-        "target": "ES2020",
-        "useDefineForClassFields": true,
-        "module": "ESNext",
+        "target": "ESNext",
         "lib": [
-            "ES2020",
-            "DOM"
+            "DOM",
+            "ESNext",
+            "WebWorker"
         ],
-        "moduleResolution": "bundler",
+        "moduleResolution": "node",
         "strict": true,
         "resolveJsonModule": true,
-        "isolatedModules": true,
-        "noEmit": true,
-        "skipLibCheck": true,
+        "esModuleInterop": true,
         "types": [
             "svelte",
             "chrome"
         ]
     },
     "include": [
-        "src/**/*.ts",
-        "src/**/*.svelte",
-        "index.html",
-        "options.html"
+        "src/**/*",
+        "src/**/*.d.ts"
     ]
 }
