@@ -48,14 +48,6 @@
 </section>
 
 <style>
-    /* Settings page */
-    .title {
-        font-weight: 700;
-    }
-    .spacer {
-        width: 36px;
-    } /* balance header spacing */
-
     .main-content {
         margin-top: 16px;
     }

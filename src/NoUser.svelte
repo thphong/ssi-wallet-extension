@@ -1,11 +1,17 @@
 <script lang="ts">
+    export let route: string;
 </script>
 
 <!-- quick actions -->
 <section class="main-content">
     <p class="large-text">Welcome to SSI Wallet!</p>
     <p>Get started by creating your first DID with the button below.</p>
-    <button class="primary">Create New DID</button>
+    <button
+        class="primary"
+        on:click={() => {
+            route = "create-user";
+        }}>Create New DID</button
+    >
 </section>
 
 <style>

@@ -2,6 +2,7 @@
     import Home from "./Home.svelte";
     import Setting from "./Setting.svelte";
     import NoUser from "./NoUser.svelte";
+    import CreateDID from "./CreateDID.svelte";
     import { type UserInfo } from "./types/users";
 
     let route: string = "home";
@@ -12,9 +13,6 @@
     //     avatar: "T",
     //     did: "did:web:localhost:5173:did:phong",
     // };
-    if (!userinfo) {
-        route = "no-user";
-    }
 
     async function openAsTab() {
         const url = chrome.runtime.getURL("popup.html");
@@ -63,15 +61,25 @@
     <!-- ============ HOME PAGE ============ -->
 
     {#if route === "home"}
-        <Home></Home>
+        {#if userinfo}
+            <Home></Home>
+        {:else}
+            <NoUser bind:route></NoUser>
+        {/if}
     {:else if route === "settings"}
         <Setting bind:route></Setting>
-    {:else if route === "no-user"}
-        <NoUser></NoUser>
+    {:else if route === "create-user"}
+        <CreateDID
+            bind:route
+            on:create={(e) => {
+                const { name, didType } = e.detail;
+                // call your DID creation logic here
+            }}
+        ></CreateDID>
     {/if}
 
     <!-- Bottom nav -->
-    {#if userinfo}
+    {#if userinfo || !userinfo}
         <nav class="tabbar" aria-label="Bottom navigation">
             <button class="tab active" title="Home">
                 <img src="/assets/home.png" alt="home" class="icon" />

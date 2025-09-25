@@ -18,6 +18,14 @@ body {
     margin-bottom: 8px;
 }
 
+.sub-header .title {
+    font-weight: 700;
+}
+
+.sub-header .spacer {
+    width: 36px;
+}
+
 .icon-btn {
     height: 36px;
     width: 36px;
@@ -53,8 +61,14 @@ button {
     font-weight: 600;
 }
 
-.primary:hover {
+.primary:hover:not(:disabled) {
     background: #dbe6f5;
+}
+
+
+.primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 .danger {
