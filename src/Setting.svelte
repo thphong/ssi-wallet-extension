@@ -2,62 +2,50 @@
     export let route: string;
 </script>
 
-<div class="wrap">
-    <header class="header">
-        <button
-            class="icon-btn"
-            aria-label="Back"
-            title="Back"
-            on:click={() => {
-                route = "home";
-            }}
-        >
-            <!-- back arrow -->
-            <svg viewBox="0 0 24 24" class="icon">
-                <path
-                    d="M15 6 9 12l6 6"
-                    stroke="currentColor"
-                    stroke-width="1.8"
-                    fill="none"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                />
-            </svg>
-        </button>
-        <div class="title">Settings</div>
-        <div class="spacer"></div>
-    </header>
+<header class="sub-header">
+    <button
+        class="icon-btn"
+        aria-label="Back"
+        title="Back"
+        on:click={() => {
+            route = "home";
+        }}
+    >
+        <img src="/assets/left.png" alt="back" class="icon" />
+    </button>
+    <div class="title">Settings</div>
+    <div class="spacer"></div>
+</header>
 
-    <section class="settings">
-        <div class="card">
-            <div class="row">
-                <div>
-                    <div class="label">Network</div>
-                    <div class="sub">Shimmer Testnet</div>
-                </div>
-                <span class="chip">Testnet</span>
+<section class="main-content">
+    <div class="card">
+        <div class="row">
+            <div>
+                <div class="label">Network</div>
+                <div class="sub">Shimmer Testnet</div>
             </div>
-            <hr />
-            <div class="row">
-                <div>
-                    <div class="label">Currency</div>
-                    <div class="sub">IOTA</div>
-                </div>
-                <div class="muted">Default</div>
-            </div>
-            <hr />
-            <div class="row">
-                <div>
-                    <div class="label">Security</div>
-                    <div class="sub">Lock after 5 minutes</div>
-                </div>
-                <button class="link">Change</button>
-            </div>
+            <span class="chip">Testnet</span>
         </div>
+        <hr />
+        <div class="row">
+            <div>
+                <div class="label">Currency</div>
+                <div class="sub">IOTA</div>
+            </div>
+            <div class="muted">Default</div>
+        </div>
+        <hr />
+        <div class="row">
+            <div>
+                <div class="label">Security</div>
+                <div class="sub">Lock after 5 minutes</div>
+            </div>
+            <button class="link">Change</button>
+        </div>
+    </div>
 
-        <button class="danger">Lock & Sign Out</button>
-    </section>
-</div>
+    <button class="danger">Expand</button>
+</section>
 
 <style>
     /* Settings page */
@@ -68,7 +56,7 @@
         width: 36px;
     } /* balance header spacing */
 
-    .settings {
+    .main-content {
         margin-top: 16px;
     }
 
@@ -96,7 +84,6 @@
         border-radius: 9999px;
         background: #eef2ff;
         color: #3730a3;
-        font-size: 12px;
     }
     .link {
         border: none;
@@ -104,17 +91,6 @@
         color: #2563eb;
         cursor: pointer;
         font-weight: 600;
-    }
-    .danger {
-        margin-top: 16px;
-        width: 100%;
-        height: 44px;
-        border-radius: 12px;
-        border: 1px solid #fecaca;
-        background: #fff5f5;
-        color: #b91c1c;
-        font-weight: 700;
-        cursor: pointer;
     }
 
     /* HR in card */
