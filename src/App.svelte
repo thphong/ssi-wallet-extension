@@ -19,6 +19,10 @@
         await chrome.tabs.create({ url });
         window.close();
     }
+
+    function openTab(tab: string) {
+        route = tab;
+    }
 </script>
 
 <div class="wrap">
@@ -69,43 +73,66 @@
     {:else if route === "settings"}
         <Setting bind:route></Setting>
     {:else if route === "create-user"}
-        <CreateDID
-            bind:route
-            on:create={(e) => {
-                const { name, didType } = e.detail;
-                // call your DID creation logic here
-            }}
-        ></CreateDID>
+        <CreateDID bind:route></CreateDID>
     {/if}
 
     <!-- Bottom nav -->
     {#if userinfo || !userinfo}
         <nav class="tabbar" aria-label="Bottom navigation">
-            <button class="tab active" title="Home">
+            <button
+                class="tab"
+                title="Home"
+                class:active={route == "home"}
+                on:click={() => {
+                    openTab("home");
+                }}
+            >
                 <img src="/assets/home.png" alt="home" class="icon" />
             </button>
-            <button class="tab" title="Credential">
+            <button
+                class="tab"
+                title="Credential"
+                class:active={route == "credential"}
+                on:click={() => {
+                    openTab("credential");
+                }}
+            >
                 <img
                     src="/assets/credential.png"
                     alt="credential"
                     class="icon"
                 />
             </button>
-            <button class="tab" title="Presentation">
+            <button
+                class="tab"
+                title="Presentation"
+                class:active={route == "presentation"}
+                on:click={() => {
+                    openTab("presentation");
+                }}
+            >
                 <img
                     src="/assets/presentation.png"
                     alt="presentation"
                     class="icon"
                 />
             </button>
-            <button class="tab" title="Verify">
+            <button
+                class="tab"
+                title="Verify"
+                class:active={route == "verify"}
+                on:click={() => {
+                    openTab("verify");
+                }}
+            >
                 <img src="/assets/verify.png" alt="verify" class="icon" />
             </button>
             <button
                 class="tab"
                 title="Settings"
+                class:active={route == "settings"}
                 on:click={() => {
-                    route = "settings";
+                    openTab("settings");
                 }}
             >
                 <img src="/assets/settings.png" alt="settings" class="icon" />
