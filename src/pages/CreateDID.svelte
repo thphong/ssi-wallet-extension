@@ -1,0 +1,119 @@
+<script lang="ts">
+    import TextInput from "../components/TextInput.svelte";
+    import Select from "../components/Select.svelte";
+    import PageHeader from "../components/PageHeader.svelte";
+    import { type UserInput } from "../types/types";
+    import { ROUTES } from "../types/enums";
+    export let route: string;
+
+    let dataInput: UserInput = {
+        name: "",
+        didType: "key",
+        urlDid: "",
+    };
+    let password = "";
+    let rePassword = "";
+    let submitting = false;
+
+    $: isValidUserInfo =
+        dataInput.name.trim().length > 0 &&
+        (dataInput.didType != "web" ||
+            (dataInput.didType == "web" && dataInput.urlDid.trim().length > 0));
+
+    $: isValidForm =
+        isValidUserInfo && password == rePassword && !!password && !!rePassword;
+
+    async function onNextStep() {
+        if (!isValidUserInfo) return;
+        route = ROUTES.CREATE_USER_2;
+    }
+
+    async function onCreateUser() {
+        if (!isValidForm) return;
+        submitting = true;
+        //TODO: create did here
+        //submitting = false;
+    }
+</script>
+
+{#if route == ROUTES.CREATE_USER_1}
+    <PageHeader bind:route routeBack={ROUTES.HOME} pageTitle="Create User"
+    ></PageHeader>
+    <div>
+        <TextInput
+            bind:value={dataInput.name}
+            label={"Display Name"}
+            sublabel={"Shown in your wallet"}
+            placeholder={"e.g., your nickname"}
+            readonlyCon={submitting}
+            maxlength={50}
+        ></TextInput>
+
+        <Select
+            bind:value={dataInput.didType}
+            label={"DID Type"}
+            sublabel={"Choose how the DID is anchored"}
+            readonlyCon={submitting}
+            options={[
+                { value: "key", name: "Key (did:key)" },
+                { value: "web", name: "Web (did:web)" },
+                { value: "blockchain", name: "Blockchain (did:iota)" },
+            ]}
+        ></Select>
+
+        {#if dataInput.didType == "web"}
+            <TextInput
+                bind:value={dataInput.urlDid}
+                label={"DID Url"}
+                sublabel={"Url to resolve your did"}
+                placeholder={"e.g., https://yourorg.vn/.well-known/did.json"}
+                readonlyCon={submitting}
+            ></TextInput>
+        {/if}
+
+        <div class="form-buttons">
+            <button
+                class="primary"
+                disabled={!isValidUserInfo || submitting}
+                on:click={onNextStep}
+            >
+                {submitting ? "Creating…" : "Create"}
+            </button>
+        </div>
+    </div>
+{:else if route == ROUTES.CREATE_USER_2}
+    <PageHeader
+        bind:route
+        routeBack={ROUTES.CREATE_USER_1}
+        pageTitle="Set Password"
+    ></PageHeader>
+    <div>
+        <TextInput
+            bind:value={password}
+            label={"Pasword"}
+            sublabel={"Pasword to encrypt your data in your wallet"}
+            placeholder={"your password"}
+            readonlyCon={submitting}
+            type="password"
+        ></TextInput>
+
+        <TextInput
+            bind:value={rePassword}
+            label={"Repeat Password"}
+            sublabel={"Repeat your password to make sure you use correct one"}
+            placeholder={"repeat your password"}
+            readonlyCon={submitting}
+            type="password"
+        ></TextInput>
+
+        <div class="form-buttons">
+            <button
+                class="primary"
+                disabled={!isValidForm || submitting}
+                on:click={onCreateUser}
+            >
+                {submitting ? "Creating…" : "Finish"}
+            </button>
+        </div>
+    </div>
+{/if}

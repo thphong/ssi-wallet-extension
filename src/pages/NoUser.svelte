@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { ROUTES } from "../types/enums";
     export let route: string;
 </script>
 
@@ -9,7 +10,7 @@
     <button
         class="primary"
         on:click={() => {
-            route = "create-user";
+            route = ROUTES.CREATE_USER_1;
         }}>Create New DID</button
     >
 </section>

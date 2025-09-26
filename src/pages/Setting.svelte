@@ -1,21 +1,11 @@
 <script lang="ts">
+    import { ROUTES } from "../types/enums";
+    import PageHeader from "../components/PageHeader.svelte";
     export let route: string;
 </script>
 
-<header class="sub-header">
-    <button
-        class="icon-btn"
-        aria-label="Back"
-        title="Back"
-        on:click={() => {
-            route = "home";
-        }}
-    >
-        <img src="/assets/left.png" alt="back" class="icon" />
-    </button>
-    <div class="title">Settings</div>
-    <div class="spacer"></div>
-</header>
+<PageHeader bind:route routeBack={ROUTES.HOME} pageTitle="Settings"
+></PageHeader>
 
 <section class="main-content">
     <div class="card">

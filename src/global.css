@@ -41,6 +41,19 @@ body {
     background: #e5e7eb;
 }
 
+@media screen and (max-width: 360px) {
+    .icon-btn.expand-icon {
+        display: grid;
+    }
+}
+
+@media screen and (min-width: 361px) {
+    .icon-btn.expand-icon {
+        display: none;
+    }
+}
+
+
 .icon {
     width: 20px;
     height: 20px;
