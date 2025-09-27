@@ -10,7 +10,7 @@
     import { ROUTES } from "./types/enums";
     import { getUsers, getCurrentUserDid } from "./did-interfaces/storage";
     import { onMount } from "svelte";
-    import { stringToColor } from "./did-interfaces/utils";
+    import { stringToColor } from "./libs/utils";
 
     let route: string = ROUTES.HOME;
     let listUsers: UserInfo[];
