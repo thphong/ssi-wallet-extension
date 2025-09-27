@@ -4,6 +4,7 @@
     import PageHeader from "../components/PageHeader.svelte";
     import { type UserInput } from "../types/types";
     import { ROUTES } from "../types/enums";
+    import { createKeyPair } from "did-core-sdk";
     export let route: string;
 
     let dataInput: UserInput = {
@@ -30,6 +31,8 @@
 
     async function onCreateUser() {
         if (!isValidForm) return;
+        const keyPair = await createKeyPair();
+        console.log("keyPair", keyPair);
         submitting = true;
         //TODO: create did here
         //submitting = false;
