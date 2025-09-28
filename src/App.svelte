@@ -8,13 +8,13 @@
     import Verify from "./pages/Verify.svelte";
     import { type UserInfo } from "./types/types";
     import { ROUTES } from "./types/enums";
-    import { getUsers, getCurrentUserDid } from "./did-interfaces/storage";
+    import { getUsers, getCurrentUser } from "./did-interfaces/users";
     import { onMount } from "svelte";
-    import { stringToColor } from "./libs/utils";
+    import { stringToColor, shortenDid } from "./libs/utils";
 
     let route: string = ROUTES.HOME;
     let listUsers: UserInfo[];
-    let currentUser: UserInfo | undefined;
+    let currentUser: UserInfo | null;
     let showMenu = false;
 
     function switchUser(user: UserInfo) {
@@ -34,12 +34,9 @@
 
     onMount(async () => {
         listUsers = await getUsers();
-        const currentDid = await getCurrentUserDid();
-        if (listUsers?.length > 0) {
-            currentUser = listUsers.find((item) => item.did == currentDid);
-            if (!currentUser) {
-                currentUser = listUsers[0];
-            }
+        currentUser = await getCurrentUser();
+        if (!currentUser && listUsers?.length > 0) {
+            currentUser = listUsers[0];
         }
     });
 </script>
@@ -59,11 +56,11 @@
                 </div>
                 <div class="meta">
                     <div class="name">{currentUser?.displayName}</div>
-                    <div class="did">{currentUser?.did}</div>
+                    <div class="did">{shortenDid(currentUser?.did)}</div>
                 </div>
             </div>
             <!-- Dropdown user list -->
-            {#if showMenu}
+            {#if showMenu && listUsers.length > 1}
                 <div class="user-menu">
                     {#each listUsers as user}
                         {#if user.did != currentUser?.did}
@@ -82,7 +79,7 @@
                                 </div>
                                 <div class="meta">
                                     <div class="name">{user.displayName}</div>
-                                    <div class="did">{user.did}</div>
+                                    <div class="did">{shortenDid(user.did)}</div>
                                 </div>
                             </div>
                         {/if}

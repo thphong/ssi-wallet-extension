@@ -1,5 +1,5 @@
 export function validateDidUrl(url: string) {
-    return !!url && url.toLowerCase().endsWith("did.json");
+  return !!url && url.toLowerCase().endsWith("did.json");
 }
 
 export function stringToColor(str: string): string {
@@ -14,4 +14,14 @@ export function stringToColor(str: string): string {
     color += ("00" + value.toString(16)).slice(-2);
   }
   return color;
+}
+
+export function shortenDid(did: string, maxLength = 35): string {
+  if (did.length <= maxLength) return did;
+
+  const keep = maxLength - 3; // reserve for "..."
+  const front = Math.ceil(keep / 2);
+  const back = Math.floor(keep / 2);
+
+  return did.slice(0, front) + "..." + did.slice(did.length - back);
 }
