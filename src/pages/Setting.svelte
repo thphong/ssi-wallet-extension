@@ -1,6 +1,8 @@
 <script lang="ts">
     import { ROUTES } from "../types/enums";
     import PageHeader from "../components/PageHeader.svelte";
+    import { lock } from "../did-interfaces/session";
+    import { currentUser } from "../did-interfaces/users";
     export let route: string;
 </script>
 
@@ -34,7 +36,14 @@
         </div>
     </div>
 
-    <button class="danger">Expand</button>
+    <button
+        class="danger"
+        on:click={() => {
+            if ($currentUser) {
+                lock($currentUser.did);
+            }
+        }}>Lock</button
+    >
 </section>
 
 <style>

@@ -10,10 +10,13 @@ import {
 } from "did-core-sdk";
 import { IndexedDb } from "../libs/indexed-db";
 import { setSession } from "./session";
+import { writable } from 'svelte/store';
 
 const dbInstance = new IndexedDb("SSI-Storage-Users", "Default");
 const KEY_LIST_USER = 'list-users';
 const CURRENT_USER = 'current-user';
+export const currentUser = writable<UserInfo | undefined>(undefined);
+export const listUsers = writable<UserInfo[]>([]);
 
 function getKeyPublicKey(did: string) {
     return `User:${did}:publickey`;
@@ -26,6 +29,7 @@ function getKeyDidDoc(did: string) {
 async function addUser(user: UserInfo) {
     let users = await getUsers();
     users.push(user);
+    listUsers.set(users);
     await dbInstance.saveValue(KEY_LIST_USER, users);
 }
 
@@ -65,23 +69,31 @@ export async function createUser(user: UserInput, password: string): Promise<Use
     return userInfo;
 }
 
-export async function getUsers(): Promise<UserInfo[]> {
+async function getUsers(): Promise<UserInfo[]> {
 
-    let users = await dbInstance.getValue(KEY_LIST_USER);
+    let users = await dbInstance.getValue<UserInfo[]>(KEY_LIST_USER);
     if (!users) {
         users = [];
     }
+    listUsers.set(users);
     return users;
 }
+getUsers();
 
-export async function getCurrentUser(): Promise<UserInfo | null> {
-    let user = await dbInstance.getValue(CURRENT_USER);
+async function getCurrentUser(): Promise<UserInfo | undefined> {
+    let user = await dbInstance.getValue<UserInfo>(CURRENT_USER);
     if (!user) {
-        user = null;
+        let users = await getUsers();
+        if (users?.length > 0) {
+            user = users[0];
+        }
     }
+    currentUser.set(user);
     return user;
 }
+getCurrentUser();
 
 export async function setCurrentUser(user: UserInfo) {
     await dbInstance.saveValue(CURRENT_USER, user);
+    currentUser.set(user);
 }

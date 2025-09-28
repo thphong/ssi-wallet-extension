@@ -6,20 +6,24 @@
     import Credential from "./pages/Credential.svelte";
     import Presentation from "./pages/Presentation.svelte";
     import Verify from "./pages/Verify.svelte";
+    import LockSession from "./pages/LockSession.svelte";
     import { type UserInfo } from "./types/types";
     import { ROUTES } from "./types/enums";
-    import { getUsers, getCurrentUser } from "./did-interfaces/users";
-    import { onMount } from "svelte";
+    import {
+        listUsers,
+        currentUser,
+        setCurrentUser,
+    } from "./did-interfaces/users";
     import { stringToColor, shortenDid } from "./libs/utils";
+    import { isSessionValid } from "./did-interfaces/session";
 
     let route: string = ROUTES.HOME;
-    let listUsers: UserInfo[];
-    let currentUser: UserInfo | null;
     let showMenu = false;
+    $: isValidSession = $currentUser && isSessionValid($currentUser?.did);
 
-    function switchUser(user: UserInfo) {
-        currentUser = user;
+    async function switchUser(user: UserInfo) {
         showMenu = false;
+        await setCurrentUser(user);
     }
 
     async function openAsTab() {
@@ -30,168 +34,182 @@
 
     function openTab(tab: string) {
         route = tab;
+        showMenu = false;
     }
-
-    onMount(async () => {
-        listUsers = await getUsers();
-        currentUser = await getCurrentUser();
-        if (!currentUser && listUsers?.length > 0) {
-            currentUser = listUsers[0];
-        }
-    });
 </script>
 
 <div class="wrap">
     <!-- Header -->
-    <header class="header">
-        {#if currentUser}
-            <div class="id">
-                <div
-                    class="avatar"
-                    style="background:{stringToColor(currentUser?.did)}"
-                    aria-hidden="true"
-                    on:click={() => (showMenu = !showMenu)}
-                >
-                    {currentUser?.avatar}
+    {#if route != ROUTES.CREATE_USER_1 && route != ROUTES.CREATE_USER_2}
+        <header class="header">
+            {#if $currentUser}
+                <div class="id">
+                    <div
+                        class="avatar"
+                        style="background:{stringToColor($currentUser?.did)}"
+                        aria-hidden="true"
+                        on:click={() => (showMenu = !showMenu)}
+                    >
+                        {$currentUser?.avatar}
+                    </div>
+                    <div class="meta">
+                        <div class="name">{$currentUser?.displayName}</div>
+                        <div class="did">{shortenDid($currentUser?.did)}</div>
+                    </div>
                 </div>
-                <div class="meta">
-                    <div class="name">{currentUser?.displayName}</div>
-                    <div class="did">{shortenDid(currentUser?.did)}</div>
-                </div>
-            </div>
-            <!-- Dropdown user list -->
-            {#if showMenu && listUsers.length > 1}
-                <div class="user-menu">
-                    {#each listUsers as user}
-                        {#if user.did != currentUser?.did}
-                            <!-- svelte-ignore a11y-click-events-have-key-events -->
-                            <!-- svelte-ignore a11y-no-static-element-interactions -->
-                            <div
-                                class="user-item"
-                                on:click={() => switchUser(user)}
-                            >
+                <!-- Dropdown user list -->
+                {#if showMenu}
+                    <div class="user-menu">
+                        {#each $listUsers as user}
+                            {#if user.did != $currentUser?.did}
+                                <!-- svelte-ignore a11y-click-events-have-key-events -->
+                                <!-- svelte-ignore a11y-no-static-element-interactions -->
                                 <div
-                                    class="avatar"
-                                    style="background:{stringToColor(user.did)}"
-                                    aria-hidden="true"
+                                    class="user-item"
+                                    on:click={() => switchUser(user)}
                                 >
-                                    {user.avatar}
+                                    <div
+                                        class="avatar"
+                                        style="background:{stringToColor(
+                                            user.did,
+                                        )}"
+                                        aria-hidden="true"
+                                    >
+                                        {user.avatar}
+                                    </div>
+                                    <div class="meta">
+                                        <div class="name">
+                                            {user.displayName}
+                                        </div>
+                                        <div class="did">
+                                            {shortenDid(user.did)}
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="meta">
-                                    <div class="name">{user.displayName}</div>
-                                    <div class="did">{shortenDid(user.did)}</div>
-                                </div>
-                            </div>
-                        {/if}
-                    {/each}
+                            {/if}
+                        {/each}
+                        <div class="user-item-button">
+                            <button
+                                class="primary"
+                                on:click={() => {
+                                    route = ROUTES.CREATE_USER_1;
+                                    showMenu = false;
+                                }}>Create New DID</button
+                            >
+                        </div>
+                    </div>
+                {/if}
+            {:else}
+                <div class="id">
+                    <button class="icon-btn">
+                        <img
+                            src="/assets/no-profile.png"
+                            alt="no-profile"
+                            class="icon"
+                        />
+                    </button>
+                    <div class="meta">
+                        <div class="name">No account</div>
+                    </div>
                 </div>
             {/if}
-        {:else}
-            <div class="id">
-                <button class="icon-btn">
+            <button
+                class="icon-btn expand-icon"
+                on:click={() => {
+                    openAsTab();
+                }}
+            >
+                <img src="/assets/expand.png" alt="settings" class="icon" />
+            </button>
+        </header>
+    {/if}
+    <!-- Main Content -->
+    {#if route === ROUTES.CREATE_USER_1 || route == ROUTES.CREATE_USER_2}
+        <CreateDID bind:route></CreateDID>
+    {:else if $currentUser}
+        {#if isValidSession}
+            {#if route === ROUTES.HOME}
+                <Home></Home>
+            {:else if route === ROUTES.CREDENTIAL}
+                <Credential></Credential>
+            {:else if route === ROUTES.PRESENTATION}
+                <Presentation></Presentation>
+            {:else if route === ROUTES.VERIFY}
+                <Verify></Verify>
+            {:else if route === ROUTES.SETTINGS}
+                <Setting bind:route></Setting>
+            {/if}
+
+            <!-- Bottom nav -->
+            <nav class="tabbar" aria-label="Bottom navigation">
+                <button
+                    class="tab"
+                    title="Home"
+                    class:active={route == ROUTES.HOME}
+                    on:click={() => {
+                        openTab(ROUTES.HOME);
+                    }}
+                >
+                    <img src="/assets/home.png" alt="home" class="icon" />
+                </button>
+                <button
+                    class="tab"
+                    title="Credential"
+                    class:active={route == ROUTES.CREDENTIAL}
+                    on:click={() => {
+                        openTab(ROUTES.CREDENTIAL);
+                    }}
+                >
                     <img
-                        src="/assets/no-profile.png"
-                        alt="no-profile"
+                        src="/assets/credential.png"
+                        alt="credential"
                         class="icon"
                     />
                 </button>
-                <div class="meta">
-                    <div class="name">No account</div>
-                </div>
-            </div>
-        {/if}
-        <button
-            class="icon-btn expand-icon"
-            on:click={() => {
-                openAsTab();
-            }}
-        >
-            <img src="/assets/expand.png" alt="settings" class="icon" />
-        </button>
-    </header>
-
-    <!-- ============ HOME PAGE ============ -->
-
-    {#if route === ROUTES.HOME}
-        {#if currentUser}
-            <Home></Home>
+                <button
+                    class="tab"
+                    title="Presentation"
+                    class:active={route == ROUTES.PRESENTATION}
+                    on:click={() => {
+                        openTab(ROUTES.PRESENTATION);
+                    }}
+                >
+                    <img
+                        src="/assets/presentation.png"
+                        alt="presentation"
+                        class="icon"
+                    />
+                </button>
+                <button
+                    class="tab"
+                    title="Verify"
+                    class:active={route == ROUTES.VERIFY}
+                    on:click={() => {
+                        openTab(ROUTES.VERIFY);
+                    }}
+                >
+                    <img src="/assets/verify.png" alt="verify" class="icon" />
+                </button>
+                <button
+                    class="tab"
+                    title="Settings"
+                    class:active={route == ROUTES.SETTINGS}
+                    on:click={() => {
+                        openTab(ROUTES.SETTINGS);
+                    }}
+                >
+                    <img
+                        src="/assets/settings.png"
+                        alt="settings"
+                        class="icon"
+                    />
+                </button>
+            </nav>
         {:else}
-            <NoUser bind:route></NoUser>
+            <LockSession></LockSession>
         {/if}
-    {:else if route === ROUTES.CREDENTIAL}
-        <Credential></Credential>
-    {:else if route === ROUTES.PRESENTATION}
-        <Presentation></Presentation>
-    {:else if route === ROUTES.VERIFY}
-        <Verify></Verify>
-    {:else if route === ROUTES.SETTINGS}
-        <Setting bind:route></Setting>
-    {:else if route === ROUTES.CREATE_USER_1 || route == ROUTES.CREATE_USER_2}
-        <CreateDID bind:route></CreateDID>
-    {/if}
-
-    <!-- Bottom nav -->
-    {#if currentUser}
-        <nav class="tabbar" aria-label="Bottom navigation">
-            <button
-                class="tab"
-                title="Home"
-                class:active={route == ROUTES.HOME}
-                on:click={() => {
-                    openTab(ROUTES.HOME);
-                }}
-            >
-                <img src="/assets/home.png" alt="home" class="icon" />
-            </button>
-            <button
-                class="tab"
-                title="Credential"
-                class:active={route == ROUTES.CREDENTIAL}
-                on:click={() => {
-                    openTab(ROUTES.CREDENTIAL);
-                }}
-            >
-                <img
-                    src="/assets/credential.png"
-                    alt="credential"
-                    class="icon"
-                />
-            </button>
-            <button
-                class="tab"
-                title="Presentation"
-                class:active={route == ROUTES.PRESENTATION}
-                on:click={() => {
-                    openTab(ROUTES.PRESENTATION);
-                }}
-            >
-                <img
-                    src="/assets/presentation.png"
-                    alt="presentation"
-                    class="icon"
-                />
-            </button>
-            <button
-                class="tab"
-                title="Verify"
-                class:active={route == ROUTES.VERIFY}
-                on:click={() => {
-                    openTab(ROUTES.VERIFY);
-                }}
-            >
-                <img src="/assets/verify.png" alt="verify" class="icon" />
-            </button>
-            <button
-                class="tab"
-                title="Settings"
-                class:active={route == ROUTES.SETTINGS}
-                on:click={() => {
-                    openTab(ROUTES.SETTINGS);
-                }}
-            >
-                <img src="/assets/settings.png" alt="settings" class="icon" />
-            </button>
-        </nav>
+    {:else}
+        <NoUser bind:route></NoUser>
     {/if}
 </div>
 
@@ -302,6 +320,14 @@
     }
 
     .user-item {
+        padding: 10px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .user-item-button {
         padding: 10px;
         cursor: pointer;
         display: flex;

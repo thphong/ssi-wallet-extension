@@ -1,9 +1,6 @@
-<script lang="ts">
-</script>
-
 <!-- quick actions -->
 <section class="main-content">
-    Home page
+    <button class="primary">Unlock your Account</button>
 </section>
 
 <style>

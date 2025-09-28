@@ -1,6 +1,8 @@
 
 import { IndexedDb } from "../libs/indexed-db";
 import { deriveStoreKey, encryptAesGcm, decryptAesGcm, randomBytes, toArrayBuffer } from "did-core-sdk";
+import { type SecretRecord } from "../types/types";
+
 const dbInstance = new IndexedDb("SSI-Storage-Session", "Default");
 
 
@@ -24,7 +26,7 @@ async function dbSetSessionExpiry(currentDid: string, expiresAtMs: number) {
 
 async function dbGetSessionExpiry(currentDid: string): Promise<number | null> {
     const key = sessionIndexExpire(currentDid);
-    const v = await dbInstance.getValue(key);
+    const v = await dbInstance.getValue<number>(key);
     return typeof v === "number" ? v : v ? Number(v) : null;
 }
 
@@ -69,7 +71,7 @@ export async function isSessionValid(currentDid: string): Promise<boolean> {
 }
 
 export async function unlock(currentDid: string, password: string) {
-    const rec = await dbInstance.getValue(sessionIndexPass(currentDid));
+    const rec = await dbInstance.getValue<SecretRecord>(sessionIndexPass(currentDid));
     if (!rec) throw new Error("No Session");
     const kStore = await deriveStoreKey(password, rec.salt);
     const pt = await decryptAesGcm(kStore, rec.iv, rec.ct);

@@ -35,12 +35,11 @@
         submitting = true;
         await createUser(dataInput, password);
         route = ROUTES.HOME;
-        location.reload();
     }
 </script>
 
 {#if route == ROUTES.CREATE_USER_1}
-    <PageHeader bind:route routeBack={ROUTES.HOME} pageTitle="Create User"
+    <PageHeader bind:route routeBack={ROUTES.HOME} pageTitle="Create New DID"
     ></PageHeader>
     <div>
         <TextInput

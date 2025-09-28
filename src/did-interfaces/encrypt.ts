@@ -1,6 +1,7 @@
 // app/keys.ts
 import { deriveStoreKey, encryptAesGcm, decryptAesGcm, randomBytes } from "did-core-sdk";
 import { IndexedDb } from "../libs/indexed-db";
+import { type SecretRecord } from "../types/types";
 
 const dbInstance = new IndexedDb("SSI-Storage-KeyStore", "Default");
 
@@ -17,7 +18,7 @@ export async function savePrivateKey(currentDid: string, password: string, rawPr
 }
 
 export async function loadPrivateKey(currentDid: string, password: string): Promise<ArrayBuffer> {
-    const rec = await dbInstance.getValue(currentDid);
+    const rec = await dbInstance.getValue<SecretRecord>(currentDid);
     if (!rec) throw new Error("Not found");
     const kStore = await deriveStoreKey(password, rec.salt);
     const pt = await decryptAesGcm(kStore, rec.iv, rec.ct);
