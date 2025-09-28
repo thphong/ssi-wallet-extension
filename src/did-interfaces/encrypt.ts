@@ -2,7 +2,7 @@
 import { deriveStoreKey, encryptAesGcm, decryptAesGcm, randomBytes } from "did-core-sdk";
 import { IndexedDb } from "../libs/indexed-db";
 
-const dbInstance = IndexedDb.getInstance("SSI-storage", "KeyStore");
+const dbInstance = new IndexedDb("SSI-Storage-KeyStore", "Default");
 
 export async function savePrivateKey(currentDid: string, password: string, rawPrivateKey: ArrayBuffer): Promise<void> {
     const salt = randomBytes(16);

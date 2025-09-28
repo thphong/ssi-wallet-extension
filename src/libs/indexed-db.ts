@@ -1,49 +1,68 @@
-import { openDB } from 'idb';
+import { openDB, type IDBPDatabase } from 'idb';
 
 export class IndexedDb {
-    private static instance: IndexedDb;
-    private database: string;
-    private store: string;
+
+    private dbName: string;
+    private storeName: string;
+    private dbp: Promise<IDBPDatabase>;
+
     constructor(database: string, store: string) {
-        this.database = database;
-        this.store = store;
-        openDB(database, 1, {
-            upgrade(db) {
-                db.createObjectStore(store);
-
-            },
-        });
+        this.dbName = database;
+        this.storeName = store;
+        this.dbp = this.init(); // ensure store exists
     }
 
-    public static getInstance(database: string, store: string): IndexedDb {
-        if (!IndexedDb.instance) {
-            IndexedDb.instance = new IndexedDb(database, store);
+    private async init(): Promise<IDBPDatabase> {
+        // Open with current version first (no upgrade)
+        let db = await openDB(this.dbName);
+        if (!db.objectStoreNames.contains(this.storeName)) {
+            const nextVersion = db.version + 1;   // bump version to trigger upgrade
+            db.close();
+            const storeName = this.storeName;     // capture for closure
+            db = await openDB(this.dbName, nextVersion, {
+                upgrade(upgradeDb) {
+                    if (!upgradeDb.objectStoreNames.contains(storeName)) {
+                        upgradeDb.createObjectStore(storeName);
+                    }
+                },
+            });
         }
-        return IndexedDb.instance;
+        return db;
     }
 
-    /**
-     * Adds a key-value pair to the IndexedDB database.
-     * @param key - The key used to identify the value in the IndexedDB database.
-     * @param value - The value to be stored in the IndexedDB database.
-     */
-    public async saveValue(key: string, value: any) {
-        const db = await openDB(this.database, 1);
-        await db.put(this.store, value, key);
-        db.close();
+    /** Put or update a value by key */
+    public async saveValue(key: IDBValidKey, value: any): Promise<void> {
+        const db = await this.dbp;
+        await db.put(this.storeName, value, key);
     }
 
-    /**
-     * Retrieves a value from the IndexedDB database based on a given key.
-     * @param key - The key used to retrieve the value from the IndexedDB database.
-     * @returns The retrieved value from the IndexedDB database, if it exists and is not expired. Otherwise, `null` is returned.
-     */
-    public async getValue(key: string) {
-        const db = await openDB(this.database, 1);
-        const value = await db.get(this.store, key);
+    /** Get a value by key */
+    public async getValue(key: IDBValidKey): Promise<any> {
+        const db = await this.dbp;
+        return db.get(this.storeName, key);
+    }
 
+    /** Delete a key */
+    public async deleteValue(key: IDBValidKey): Promise<void> {
+        const db = await this.dbp;
+        await db.delete(this.storeName, key);
+    }
+
+    /** Clear all entries in this store */
+    public async clear(): Promise<void> {
+        const db = await this.dbp;
+        await db.clear(this.storeName);
+    }
+
+    /** Get all keys (handy for debugging) */
+    public async keys(): Promise<IDBValidKey[]> {
+        const db = await this.dbp;
+        return db.getAllKeys(this.storeName);
+    }
+
+    /** Optional: close DB (usually not needed in web apps) */
+    public async close(): Promise<void> {
+        const db = await this.dbp;
         db.close();
-        return value;
-
     }
 }

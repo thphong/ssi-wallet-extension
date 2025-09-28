@@ -1,7 +1,7 @@
 
 import { IndexedDb } from "../libs/indexed-db";
 import { deriveStoreKey, encryptAesGcm, decryptAesGcm, randomBytes, toArrayBuffer } from "did-core-sdk";
-const dbInstance = IndexedDb.getInstance("SSI-storage", "Session");
+const dbInstance = new IndexedDb("SSI-Storage-Session", "Default");
 
 
 const SESSION_TTL_MS = 2 * 24 * 60 * 60 * 1000; // 2 days

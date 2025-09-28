@@ -11,7 +11,7 @@ import {
 import { IndexedDb } from "../libs/indexed-db";
 import { setSession } from "./session";
 
-const dbInstance = IndexedDb.getInstance("SSI-storage", "Users");
+const dbInstance = new IndexedDb("SSI-Storage-Users", "Default");
 const KEY_LIST_USER = 'list-users';
 const CURRENT_USER = 'current-user';
 
