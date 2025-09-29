@@ -6,6 +6,7 @@
     export let readonlyCon = false;
     export let placeholder = "";
     export let type = "text";
+    export let errorMessage = "";
 </script>
 
 <div class="field">
@@ -33,5 +34,10 @@
             {maxlength}
             class:readonly={readonlyCon}
         />
+    {/if}
+    {#if errorMessage}
+        <div class="error-message">
+            {errorMessage}
+        </div>
     {/if}
 </div>

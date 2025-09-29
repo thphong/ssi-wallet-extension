@@ -106,6 +106,7 @@
             placeholder={"repeat your password"}
             readonlyCon={submitting}
             type="password"
+            errorMessage={!!rePassword && !!password && rePassword != password ? "Your passwords are not matched" : ""}
         ></TextInput>
 
         <div class="form-buttons">

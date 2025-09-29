@@ -108,7 +108,7 @@
                 {/if}
             {:else}
                 <div class="id">
-                    <button class="icon-btn">
+                    <button class="icon-btn nohover">
                         <img
                             src="/assets/no-profile.png"
                             alt="no-profile"

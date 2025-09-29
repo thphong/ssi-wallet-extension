@@ -4,20 +4,39 @@
     import { currentUser } from "../did-interfaces/users";
     let password = "";
     let submitting = false;
+    let errorMessage = "";
+
+    currentUser.subscribe(() => {
+        password = "";
+        submitting = false;
+        errorMessage = "";
+    });
+
+    $: isValidPassword = password.trim().length > 0;
 </script>
 
 <section class="main-content">
     <TextInput
         bind:value={password}
-        placeholder={"your password"}
+        placeholder={"Enter your password"}
         readonlyCon={submitting}
         type="password"
+        {errorMessage}
     ></TextInput>
     <button
         class="primary"
-        on:click={() => {
+        disabled={!isValidPassword || submitting}
+        on:click={async () => {
             if ($currentUser) {
-                unlock($currentUser.did, password);
+                try {
+                    errorMessage = "";
+                    submitting = true;
+                    await unlock($currentUser.did, password);
+                } catch {
+                    errorMessage = "Please check your password and try again";
+                } finally {
+                    submitting = false;
+                }
             }
         }}>Unlock your Account</button
     >
