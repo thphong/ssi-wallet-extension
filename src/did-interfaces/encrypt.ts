@@ -3,17 +3,14 @@ import { deriveStoreKey, encryptAesGcm, decryptAesGcm, randomBytes } from "did-c
 import { IndexedDb } from "../libs/indexed-db";
 import { type SecretRecord } from "../types/types";
 
-const dbInstance = new IndexedDb("SSI-Storage-KeyStore", "Default");
+const dbInstance: IndexedDb = IndexedDb.getInstance();
 
 export async function savePrivateKey(currentDid: string, password: string, rawPrivateKey: ArrayBuffer): Promise<void> {
     const salt = randomBytes(16);
     const kStore = await deriveStoreKey(password, salt);
     const { iv, ct } = await encryptAesGcm(kStore, rawPrivateKey);
     await dbInstance.saveValue(currentDid, {
-        id: currentDid,
-        salt, iv, ct,
-        version: 1,
-        createdAt: Date.now(),
+        salt, iv, ct
     });
 }
 

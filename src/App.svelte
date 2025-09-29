@@ -15,11 +15,18 @@
         setCurrentUser,
     } from "./did-interfaces/users";
     import { stringToColor, shortenDid } from "./libs/utils";
-    import { isSessionValid } from "./did-interfaces/session";
+    import { isSessionValid, triggerRefreshSession } from "./did-interfaces/session";
 
     let route: string = ROUTES.HOME;
     let showMenu = false;
-    $: isValidSession = $currentUser && isSessionValid($currentUser?.did);
+    let isValidSession: boolean = false;
+    $: if ($currentUser && $triggerRefreshSession) {
+        (async () => {
+            isValidSession = await isSessionValid($currentUser.did);
+        })();
+    } else {
+        isValidSession = false;
+    }
 
     async function switchUser(user: UserInfo) {
         showMenu = false;
@@ -219,7 +226,7 @@
         width: 360px;
         min-height: 560px;
         box-sizing: border-box;
-        padding: 16px 16px 84px;
+        padding: 16px 16px 16px;
         background: #fff;
         color: #111827;
         font-family:

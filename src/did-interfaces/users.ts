@@ -12,7 +12,7 @@ import { IndexedDb } from "../libs/indexed-db";
 import { setSession } from "./session";
 import { writable } from 'svelte/store';
 
-const dbInstance = new IndexedDb("SSI-Storage-Users", "Default");
+const dbInstance: IndexedDb = IndexedDb.getInstance();
 const KEY_LIST_USER = 'list-users';
 const CURRENT_USER = 'current-user';
 export const currentUser = writable<UserInfo | undefined>(undefined);

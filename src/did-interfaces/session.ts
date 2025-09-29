@@ -2,9 +2,11 @@
 import { IndexedDb } from "../libs/indexed-db";
 import { deriveStoreKey, encryptAesGcm, decryptAesGcm, randomBytes, toArrayBuffer } from "did-core-sdk";
 import { type SecretRecord } from "../types/types";
+import { writable } from 'svelte/store';
 
-const dbInstance = new IndexedDb("SSI-Storage-Session", "Default");
+export const triggerRefreshSession = writable<number>(Date.now());
 
+const dbInstance: IndexedDb = IndexedDb.getInstance();
 
 const SESSION_TTL_MS = 2 * 24 * 60 * 60 * 1000; // 2 days
 const messageOK = toArrayBuffer(new TextEncoder().encode("Ok"));
@@ -28,6 +30,12 @@ async function dbGetSessionExpiry(currentDid: string): Promise<number | null> {
     const key = sessionIndexExpire(currentDid);
     const v = await dbInstance.getValue<number>(key);
     return typeof v === "number" ? v : v ? Number(v) : null;
+}
+
+async function refreshSession(currentDid: string): Promise<void> {
+    const now = Date.now();
+    const newExpiresAt = now + SESSION_TTL_MS;
+    await dbSetSessionExpiry(currentDid, newExpiresAt);
 }
 
 // ---- Public API ----
@@ -56,12 +64,6 @@ export async function setSession(currentDid: string, password: string) {
     await refreshSession(currentDid);
 }
 
-export async function refreshSession(currentDid: string): Promise<void> {
-    const now = Date.now();
-    const newExpiresAt = now + SESSION_TTL_MS;
-    await dbSetSessionExpiry(currentDid, newExpiresAt);
-}
-
 export async function isSessionValid(currentDid: string): Promise<boolean> {
     const expiresAt = await dbGetSessionExpiry(currentDid);
     if (!expiresAt || Date.now() >= expiresAt) {
@@ -77,6 +79,7 @@ export async function unlock(currentDid: string, password: string) {
     const pt = await decryptAesGcm(kStore, rec.iv, rec.ct);
     if (arrayBufferEquals(pt, messageOK)) {
         await refreshSession(currentDid);
+        triggerRefreshSession.set(Date.now());
     }
     else {
         throw new Error("Password is incorrect");
@@ -87,6 +90,7 @@ export async function lock(currentDid: string) {
     const now = Date.now();
     const newExpiresAt = now;
     await dbSetSessionExpiry(currentDid, newExpiresAt);
+    triggerRefreshSession.set(Date.now());
 }
 
 
