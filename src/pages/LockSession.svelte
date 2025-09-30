@@ -2,9 +2,11 @@
     import TextInput from "../components/TextInput.svelte";
     import { unlock } from "../did-interfaces/session";
     import { currentUser } from "../did-interfaces/users";
+    
     let password = "";
     let submitting = false;
     let errorMessage = "";
+
 
     currentUser.subscribe(() => {
         password = "";

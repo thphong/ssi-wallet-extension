@@ -25,6 +25,14 @@
             {maxlength}
             class:readonly={readonlyCon}
         />
+    {:else if type == "textarea"}
+        <textarea
+            class="textarea"
+            {placeholder}
+            bind:value
+            {maxlength}
+            class:readonly={readonlyCon}
+        />
     {:else}
         <input
             class="input"

@@ -4,6 +4,7 @@
     import NoUser from "./pages/NoUser.svelte";
     import CreateDID from "./pages/CreateDID.svelte";
     import Credential from "./pages/Credential.svelte";
+    import CredentialNew from "./pages/CredentialNew.svelte";
     import Presentation from "./pages/Presentation.svelte";
     import Verify from "./pages/Verify.svelte";
     import LockSession from "./pages/LockSession.svelte";
@@ -15,7 +16,10 @@
         setCurrentUser,
     } from "./did-interfaces/users";
     import { stringToColor, shortenDid } from "./libs/utils";
-    import { isSessionValid, triggerRefreshSession } from "./did-interfaces/session";
+    import {
+        isSessionValid,
+        triggerRefreshSession,
+    } from "./did-interfaces/session";
 
     let route: string = ROUTES.HOME;
     let showMenu = false;
@@ -31,6 +35,7 @@
     async function switchUser(user: UserInfo) {
         showMenu = false;
         await setCurrentUser(user);
+        route = ROUTES.HOME;
     }
 
     async function openAsTab() {
@@ -138,7 +143,9 @@
             {#if route === ROUTES.HOME}
                 <Home></Home>
             {:else if route === ROUTES.CREDENTIAL}
-                <Credential></Credential>
+                <Credential bind:route></Credential>
+            {:else if route === ROUTES.CREDENTIAL_CREATE}
+                <CredentialNew bind:route></CredentialNew>
             {:else if route === ROUTES.PRESENTATION}
                 <Presentation></Presentation>
             {:else if route === ROUTES.VERIFY}
@@ -162,7 +169,7 @@
                 <button
                     class="tab"
                     title="Credential"
-                    class:active={route == ROUTES.CREDENTIAL}
+                    class:active={route == ROUTES.CREDENTIAL || route == ROUTES.CREDENTIAL_CREATE}
                     on:click={() => {
                         openTab(ROUTES.CREDENTIAL);
                     }}

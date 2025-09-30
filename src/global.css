@@ -130,7 +130,8 @@ button {
 }
 
 .input,
-.select {
+.select,
+.textarea {
     padding: 6px 10px;
     border: 1px solid #e5e7eb;
     border-radius: 8px;
@@ -151,7 +152,13 @@ button {
     height: 39px;
 }
 
+.textarea {
+    height: 100px;
+    resize: vertical;
+}
+
 .input:focus,
-.select:focus {
+.select:focus,
+.textarea:focus {
     border-color: #93c5fd;
 }
