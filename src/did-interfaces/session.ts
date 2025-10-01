@@ -13,11 +13,11 @@ const messageOK = toArrayBuffer(new TextEncoder().encode("Ok"));
 
 // ---- DB index helpers (work with either index-API or value-API) ----
 function sessionIndexExpire(did: string) {
-    return `__session__:${did}:expiresAt`;
+    return `session:expiresAt:${did}`;
 }
 
 function sessionIndexPass(did: string) {
-    return `__session__:${did}:password`;
+    return `session:password:${did}`;
 }
 
 // Try index-style first; fall back to value store if not available.

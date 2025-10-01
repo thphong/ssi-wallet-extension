@@ -6,10 +6,11 @@
     import { ROUTES } from "../types/enums";
     import { createVC, resolveDid } from "did-core-sdk";
     import { currentUser } from "../did-interfaces/users";
+    import { loadPrivateKey } from "../did-interfaces/encrypt";
 
     export let route: string;
 
-    let dataInput = {
+    let dataInput: any = {
         issuer: "",
         subject: "",
         expirationDate: "",
@@ -19,6 +20,7 @@
             text: undefined,
         },
     };
+    let password = "";
 
     currentUser.subscribe((user) => {
         if (user) {
@@ -27,13 +29,15 @@
     });
 
     let submitting = false;
+    let IsValidDid = true;
+    let IsValidPassword = true;
 
     $: isValidForm =
         dataInput.subject.trim().length > 0 &&
+        IsValidDid &&
+        IsValidPassword &&
         dataInput.jsonValue.json &&
         JSON.stringify(dataInput.jsonValue.json) != "{}";
-
-    let IsValidDid = true;
 
     async function onCheckDid() {
         if (!dataInput.subject) {
@@ -54,11 +58,30 @@
         }
     }
 
+    async function onCheckPassword() {
+        if (!password) {
+            IsValidPassword = false;
+            return;
+        }
+        try {
+            const pk = await loadPrivateKey(dataInput.issuer, password);
+            if (pk) {
+                IsValidPassword = true;
+            } else {
+                IsValidPassword = false;
+            }
+        } catch {
+            IsValidPassword = false;
+        }
+    }
+
     async function onCreateCredential() {
         if (!isValidForm) return;
         dataInput.credentialSubject = dataInput.jsonValue.json;
         submitting = true;
-        //route = ROUTES.HOME;
+        const pk = await loadPrivateKey(dataInput.issuer, password);
+        const vc = await createVC(dataInput, pk);
+        route = ROUTES.HOME;
     }
 </script>
 
@@ -82,6 +105,17 @@
         placeholder={"Select Expired Date"}
         readonlyCon={submitting}
     ></DatePicker>
+
+    <TextInput
+        bind:value={password}
+        label={"Pasword"}
+        sublabel={"Pasword to load your private key to sign credential"}
+        placeholder={"your password"}
+        readonlyCon={submitting}
+        type="password"
+        on:change={onCheckPassword}
+        errorMessage={!IsValidPassword ? "password is not valid" : ""}
+    ></TextInput>
 
     <JsonEditor
         bind:value={dataInput.jsonValue}

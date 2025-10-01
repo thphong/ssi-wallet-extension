@@ -7,23 +7,25 @@ import {
     didWeb,
     didIOTA,
     type DidDocument,
+    jwkToArrayBuffer
 } from "did-core-sdk";
 import { IndexedDb } from "../libs/indexed-db";
 import { setSession } from "./session";
 import { writable } from 'svelte/store';
+import { savePrivateKey, loadPrivateKey } from "./encrypt";
 
 const dbInstance: IndexedDb = IndexedDb.getInstance();
-const KEY_LIST_USER = 'list-users';
-const CURRENT_USER = 'current-user';
+const KEY_LIST_USER = 'user:list-users';
+const CURRENT_USER = 'user:current-user';
 export const currentUser = writable<UserInfo | undefined>(undefined);
 export const listUsers = writable<UserInfo[]>([]);
 
 function getKeyPublicKey(did: string) {
-    return `User:${did}:publickey`;
+    return `user:publickey:${did}`;
 }
 
 function getKeyDidDoc(did: string) {
-    return `User:${did}:didDoc`;
+    return `user:didDoc:${did}`;
 }
 
 async function addUser(user: UserInfo) {
@@ -61,6 +63,10 @@ export async function createUser(user: UserInput, password: string): Promise<Use
     }
 
     await setSession(did, password);
+    if (keyPair.privateKeyJwk) {
+        const pkArray = await jwkToArrayBuffer(keyPair.privateKeyJwk);
+        await savePrivateKey(did, password, pkArray);
+    }
     await addUser(userInfo);
     await setCurrentUser(userInfo);
     await dbInstance.saveValue(getKeyPublicKey(did), keyPair.publicKeyJwk);
