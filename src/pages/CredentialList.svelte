@@ -1,6 +1,6 @@
 <script lang="ts">
-    import { type VCIem } from "../types/types";
-    export let credentials: VCIem[] = [];
+    import { type VC } from "did-core-sdk";
+    export let credentials: VC[] = [];
 </script>
 
 <div class="credentials-list">
@@ -10,13 +10,13 @@
         {#each credentials as cred}
             <div class="credential-card">
                 <div class="cred-header">
-                    <span class="cred-name">{cred.name}</span>
+                    <span class="cred-name">{cred.subject}</span>
                     <span class="cred-type">{cred.type.join(", ")}</span>
                 </div>
                 <div class="cred-meta">
                     <span class="cred-issuer">Issuer: {cred.issuer}</span>
                     <span class="cred-date"
-                        >{new Date(cred.issuedAt).toLocaleDateString()}</span
+                        >{new Date(cred.issuanceDate).toLocaleDateString()}</span
                     >
                 </div>
             </div>

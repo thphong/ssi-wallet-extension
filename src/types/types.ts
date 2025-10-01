@@ -20,11 +20,3 @@ export type SecretRecord = {
     iv: ArrayBuffer;             // cho AES-GCM
     ct: ArrayBuffer;             // ciphertext
 };
-
-export type VCIem = {
-    name: string;           // cho PBKDF2
-    type: string[];             // cho AES-GCM
-    issuedAt: Date;
-    issuer: string;
-    vc: VC;
-};

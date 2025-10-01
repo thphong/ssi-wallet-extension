@@ -1,14 +1,21 @@
 <script lang="ts">
     import PageHeader from "../components/PageHeader.svelte";
     import CredentialList from "./CredentialList.svelte";
-    import { onMount } from "svelte";
     import { ROUTES } from "../types/enums";
+    import {
+        listOwnCredentials,
+        listDeliveryCredentials,
+        getOwnCredentials,
+        getDeliveryCredentials,
+    } from "../did-interfaces/credential";
+    import { currentUser } from "../did-interfaces/users";
     export let route: string;
 
-    let credentials: any[] = [];
-
-    onMount(async () => {
-        credentials = [];
+    currentUser.subscribe((user) => {
+        if (user) {
+            getOwnCredentials(user.did);
+            getDeliveryCredentials(user.did);
+        }
     });
 </script>
 
@@ -20,9 +27,10 @@
         }}>Create Credential</button
     >
     <PageHeader pageTitle="Credentials"></PageHeader>
-    <CredentialList {credentials} /><PageHeader pageTitle="Credentials"
+    <CredentialList credentials={$listOwnCredentials} /><PageHeader
+        pageTitle="Credentials"
     ></PageHeader>
-    <CredentialList {credentials} />
+    <CredentialList credentials={$listDeliveryCredentials} />
 </section>
 
 <style>

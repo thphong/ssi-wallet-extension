@@ -12,7 +12,7 @@ import {
 import { IndexedDb } from "../libs/indexed-db";
 import { setSession } from "./session";
 import { writable } from 'svelte/store';
-import { savePrivateKey, loadPrivateKey } from "./encrypt";
+import { savePrivateKey } from "./encrypt";
 
 const dbInstance: IndexedDb = IndexedDb.getInstance();
 const KEY_LIST_USER = 'user:list-users';
