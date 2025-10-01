@@ -1,8 +1,10 @@
 <script lang="ts">
     import TextInput from "../components/TextInput.svelte";
+    import DatePicker from "../components/DatePicker.svelte";
+    import JsonEditor from "../components/JsonEditor.svelte";
     import PageHeader from "../components/PageHeader.svelte";
     import { ROUTES } from "../types/enums";
-    import { createVC } from "did-core-sdk";
+    import { createVC, resolveDid } from "did-core-sdk";
     import { currentUser } from "../did-interfaces/users";
 
     export let route: string;
@@ -11,12 +13,11 @@
         issuer: "",
         subject: "",
         expirationDate: "",
-        credentialSubject: `{
-            roles: {
-                READ_BANK_ACCOUNT: "Allow to read account balance",
-                MAKE_TRANSACTION: "Allow to make a transaction",
-            },
-        }`,
+        credentialSubject: {},
+        jsonValue: {
+            json: {},
+            text: undefined,
+        },
     };
 
     currentUser.subscribe((user) => {
@@ -28,12 +29,36 @@
     let submitting = false;
 
     $: isValidForm =
-        dataInput.subject.trim().length > 0 && dataInput.credentialSubject;
+        dataInput.subject.trim().length > 0 &&
+        dataInput.jsonValue.json &&
+        JSON.stringify(dataInput.jsonValue.json) != "{}";
+
+    let IsValidDid = true;
+
+    async function onCheckDid() {
+        if (!dataInput.subject) {
+            IsValidDid = false;
+            return;
+        }
+        try {
+            const res = await resolveDid(dataInput.subject, {
+                protocol: "http",
+            });
+            if (res) {
+                IsValidDid = true;
+            } else {
+                IsValidDid = false;
+            }
+        } catch {
+            IsValidDid = false;
+        }
+    }
 
     async function onCreateCredential() {
         if (!isValidForm) return;
+        dataInput.credentialSubject = dataInput.jsonValue.json;
         submitting = true;
-        route = ROUTES.HOME;
+        //route = ROUTES.HOME;
     }
 </script>
 
@@ -46,24 +71,24 @@
         sublabel={"DID of the credential recipient"}
         placeholder={"Enter Subject"}
         readonlyCon={submitting}
+        on:change={onCheckDid}
+        errorMessage={!IsValidDid ? "did is not valid, can't resolve" : ""}
     ></TextInput>
 
-    <TextInput
+    <DatePicker
         bind:value={dataInput.expirationDate}
         label={"Expiration Date"}
         sublabel={"Credential valid until"}
         placeholder={"Select Expired Date"}
         readonlyCon={submitting}
-    ></TextInput>
+    ></DatePicker>
 
-    <TextInput
-        bind:value={dataInput.credentialSubject}
+    <JsonEditor
+        bind:value={dataInput.jsonValue}
         label={"Credential Subject"}
         sublabel={"Credential Subject in JSON format"}
-        placeholder={"Enter Credential Subject"}
         readonlyCon={submitting}
-        type="textarea"
-    ></TextInput>
+    ></JsonEditor>
 
     <div class="form-buttons">
         <button

@@ -1,4 +1,7 @@
 <script lang="ts">
+    import { createEventDispatcher } from "svelte";
+    const dispatch = createEventDispatcher();
+
     export let label = "";
     export let sublabel = "";
     export let value: string;
@@ -7,6 +10,12 @@
     export let placeholder = "";
     export let type = "text";
     export let errorMessage = "";
+
+    function handleChange(event: Event) {
+        dispatch("change", {
+            value: (event.target as HTMLInputElement).value,
+        });
+    }
 </script>
 
 <div class="field">
@@ -24,6 +33,7 @@
             bind:value
             {maxlength}
             class:readonly={readonlyCon}
+            on:change={handleChange}
         />
     {:else if type == "textarea"}
         <textarea
@@ -41,6 +51,7 @@
             bind:value
             {maxlength}
             class:readonly={readonlyCon}
+            on:change={handleChange}
         />
     {/if}
     {#if errorMessage}

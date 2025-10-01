@@ -140,20 +140,21 @@
         <CreateDID bind:route></CreateDID>
     {:else if $currentUser}
         {#if isValidSession}
-            {#if route === ROUTES.HOME}
-                <Home></Home>
-            {:else if route === ROUTES.CREDENTIAL}
-                <Credential bind:route></Credential>
-            {:else if route === ROUTES.CREDENTIAL_CREATE}
-                <CredentialNew bind:route></CredentialNew>
-            {:else if route === ROUTES.PRESENTATION}
-                <Presentation></Presentation>
-            {:else if route === ROUTES.VERIFY}
-                <Verify></Verify>
-            {:else if route === ROUTES.SETTINGS}
-                <Setting bind:route></Setting>
-            {/if}
-
+            <div class="body-content">
+                {#if route === ROUTES.HOME}
+                    <Home></Home>
+                {:else if route === ROUTES.CREDENTIAL}
+                    <Credential bind:route></Credential>
+                {:else if route === ROUTES.CREDENTIAL_CREATE}
+                    <CredentialNew bind:route></CredentialNew>
+                {:else if route === ROUTES.PRESENTATION}
+                    <Presentation></Presentation>
+                {:else if route === ROUTES.VERIFY}
+                    <Verify></Verify>
+                {:else if route === ROUTES.SETTINGS}
+                    <Setting bind:route></Setting>
+                {/if}
+            </div>
             <!-- Bottom nav -->
             <nav class="tabbar" aria-label="Bottom navigation">
                 <button
@@ -169,7 +170,8 @@
                 <button
                     class="tab"
                     title="Credential"
-                    class:active={route == ROUTES.CREDENTIAL || route == ROUTES.CREDENTIAL_CREATE}
+                    class:active={route == ROUTES.CREDENTIAL ||
+                        route == ROUTES.CREDENTIAL_CREATE}
                     on:click={() => {
                         openTab(ROUTES.CREDENTIAL);
                     }}
@@ -286,13 +288,17 @@
         color: #6b7280;
     }
 
+    .body-content {
+        min-height: 445px;
+    }
+
     /* Bottom tab bar */
     .tabbar {
-        position: absolute;
+        position: relative;
         left: 0;
         right: 0;
         bottom: 0;
-        padding: 10px 16px 14px;
+        padding-top: 16px;
         display: grid;
         grid-template-columns: repeat(5, 1fr);
         gap: 10px;
