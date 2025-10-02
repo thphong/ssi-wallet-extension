@@ -1,41 +1,50 @@
 <script lang="ts">
     import { type VC } from "did-core-sdk";
+    import JsonViewer from "../components/JsonViewer.svelte";
+    import { shortenDid, formatDate } from "../libs/utils";
     export let credentials: VC[] = [];
 </script>
 
-<div class="credentials-list">
-    {#if credentials.length === 0}
+{#if credentials.length === 0}
+    <div class="empty-box">
         <p class="empty">No credentials yet</p>
-    {:else}
-        {#each credentials as cred}
-            <div class="credential-card">
-                <div class="cred-header">
-                    <span class="cred-name">{cred.subject}</span>
-                    <span class="cred-type">{cred.type.join(", ")}</span>
-                </div>
-                <div class="cred-meta">
-                    <span class="cred-issuer">Issuer: {cred.issuer}</span>
-                    <span class="cred-date"
-                        >{new Date(cred.issuanceDate).toLocaleDateString()}</span
-                    >
-                </div>
+    </div>
+{:else}
+    {#each credentials as cred}
+        <div class="credential-card">
+            <div class="cred-meta">Credential Subject:</div>
+            <div>
+                <JsonViewer data={cred.credentialSubject} collapsedAt={1} />
             </div>
-        {/each}
-    {/if}
-</div>
+            <div class="cred-meta">
+                <span class="cred-issuer"
+                    >Issuer: {shortenDid(cred.issuer, 31)}</span
+                >
+                <span class="cred-date"
+                    >Issue Date: {formatDate(cred.issuanceDate)}</span
+                >
+                {#if cred.expirationDate}
+                    <span class="expire-date"
+                        >Expired Date: {formatDate(cred.expirationDate)}</span
+                    >
+                {/if}
+            </div>
+        </div>
+    {/each}
+{/if}
 
 <style>
-    .credentials-list {
+    .empty-box {
         border: 1px solid #e5e7eb;
         border-radius: 12px;
         padding: 1rem;
         background: #fff;
-        min-height: 120px;
+        min-height: 50px;
     }
     .empty {
         text-align: center;
-        color: #6b7280;
-        font-size: 0.9rem;
+        color: #3a3a3b;
+        font-size: 13.33px;
         padding: 1rem 0;
     }
     .credential-card {
@@ -45,16 +54,13 @@
         margin-bottom: 0.75rem;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     }
-    .cred-header {
-        font-weight: 600;
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 0.25rem;
-    }
     .cred-meta {
-        font-size: 0.8rem;
-        color: #6b7280;
-        display: flex;
+        font-size: 13px;
+        color: #3a3a3b;
+        display: grid;
         justify-content: space-between;
+    }
+    .expire-date {
+        font-weight: bold;
     }
 </style>

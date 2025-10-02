@@ -25,3 +25,12 @@ export function shortenDid(did: string, maxLength = 35): string {
 
   return did.slice(0, front) + "..." + did.slice(did.length - back);
 }
+
+export function formatDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric"
+  }).format(date).replace(/\s/g, "-");
+}

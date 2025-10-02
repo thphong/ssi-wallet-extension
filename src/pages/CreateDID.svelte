@@ -94,7 +94,7 @@
             bind:value={password}
             label={"Pasword"}
             sublabel={"Pasword to encrypt your data in your wallet"}
-            placeholder={"your password"}
+            placeholder={"Your password"}
             readonlyCon={submitting}
             type="password"
         ></TextInput>
@@ -103,7 +103,7 @@
             bind:value={rePassword}
             label={"Repeat Password"}
             sublabel={"Repeat your password to make sure you use correct one"}
-            placeholder={"repeat your password"}
+            placeholder={"Repeat your password"}
             readonlyCon={submitting}
             type="password"
             errorMessage={!!rePassword && !!password && rePassword != password ? "Your passwords are not matched" : ""}

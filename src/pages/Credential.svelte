@@ -1,5 +1,4 @@
 <script lang="ts">
-    import PageHeader from "../components/PageHeader.svelte";
     import CredentialList from "./CredentialList.svelte";
     import { ROUTES } from "../types/enums";
     import {
@@ -26,10 +25,9 @@
             route = ROUTES.CREDENTIAL_CREATE;
         }}>Create Credential</button
     >
-    <PageHeader pageTitle="Credentials"></PageHeader>
-    <CredentialList credentials={$listOwnCredentials} /><PageHeader
-        pageTitle="Credentials"
-    ></PageHeader>
+    <div class="list-hear">Credentials You Have</div>
+    <CredentialList credentials={$listOwnCredentials} />
+    <div class="list-header">Credentials You Issue</div>
     <CredentialList credentials={$listDeliveryCredentials} />
 </section>
 
@@ -38,5 +36,10 @@
     .main-content {
         text-align: left;
         margin: 18px 2px;
+    }
+
+    .list-header {
+        font-size: 14px;
+        padding: 10px 5px 10px 5px;
     }
 </style>

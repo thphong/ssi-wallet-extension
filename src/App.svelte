@@ -148,7 +148,7 @@
                 {:else if route === ROUTES.CREDENTIAL_CREATE}
                     <CredentialNew bind:route></CredentialNew>
                 {:else if route === ROUTES.PRESENTATION}
-                    <Presentation></Presentation>
+                    <Presentation bind:route></Presentation>
                 {:else if route === ROUTES.VERIFY}
                     <Verify></Verify>
                 {:else if route === ROUTES.SETTINGS}

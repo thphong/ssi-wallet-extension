@@ -116,7 +116,7 @@
         bind:value={password}
         label={"Pasword"}
         sublabel={"Pasword to load your private key to sign credential"}
-        placeholder={"your password"}
+        placeholder={"Your password"}
         readonlyCon={submitting}
         type="password"
         on:change={onCheckPassword}
