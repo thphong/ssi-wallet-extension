@@ -37,6 +37,11 @@ body {
     cursor: pointer;
 }
 
+.icon-btn.icon-btn-small {
+    height: 30px;
+    width: 30px;
+}
+
 .icon-btn:hover {
     background: #e5e7eb;
 }
@@ -66,6 +71,18 @@ body {
 
 button {
     font-family: inherit;
+}
+
+.secondary {
+    border: none;
+    height: 30px;
+    border-radius: 9999px;
+    background: #e5ecf7;
+    color: #111827;
+    cursor: pointer;
+    font-weight: 600;
+    padding-left: 10px;
+    padding-right: 10px;
 }
 
 .primary {
@@ -167,4 +184,6 @@ button {
 .list-header {
     font-size: 14px;
     padding: 10px 5px 10px 5px;
+    font-weight: bold;
+
 }

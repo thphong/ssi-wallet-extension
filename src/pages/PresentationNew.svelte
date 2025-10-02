@@ -7,6 +7,7 @@
     import { currentUser } from "../did-interfaces/users";
     import { loadPrivateKey } from "../did-interfaces/encrypt";
     import { addPresentation } from "../did-interfaces/presentation";
+    import { getOwnCredentials } from "../did-interfaces/credential";
 
     export let route: string;
     export let selectedVCs: VC[] = [];
@@ -50,6 +51,7 @@
         const vp = await createVP(selectedVCs, holderDid, pk, nonce);
         await addPresentation(holderDid, vp);
         selectedVCs = [];
+        await getOwnCredentials(holderDid);
         route = ROUTES.PRESENTATION;
     }
 </script>
@@ -90,4 +92,4 @@
     </div>
 </div>
 <div class="list-header">Credentials You Selected:</div>
-<CredentialList credentials={selectedVCs} />
+<CredentialList credentials={selectedVCs} maxIndex={selectedVCs.length} />

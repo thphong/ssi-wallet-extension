@@ -34,3 +34,23 @@ export function formatDate(dateStr: string): string {
     year: "numeric"
   }).format(date).replace(/\s/g, "-");
 }
+
+export function downloadJSON(obj: any, filename = "data.json") {
+  // Convert object → JSON string
+  const jsonStr = JSON.stringify(obj, null, 2);
+
+  // Create a Blob from the string
+  const blob = new Blob([jsonStr], { type: "application/json" });
+
+  // Create a temporary <a> element
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+
+  // Trigger the download
+  a.click();
+
+  // Cleanup
+  URL.revokeObjectURL(url);
+}

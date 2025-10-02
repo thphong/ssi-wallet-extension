@@ -2,9 +2,12 @@
     import { type VC } from "did-core-sdk";
     import JsonViewer from "../components/JsonViewer.svelte";
     import { shortenDid, formatDate } from "../libs/utils";
+    import { downloadJSON } from "../libs/utils";
     export let credentials: any[] = [];
     export let selectedVCs: VC[] = [];
     export let needSelection = false;
+    export let maxIndex = 1;
+    export let stepIndex = 2;
 
     function onGetSelection() {
         selectedVCs = credentials.filter((item) => item.selected);
@@ -16,17 +19,29 @@
         <p class="empty">No credentials yet</p>
     </div>
 {:else}
-    {#each credentials as cred}
+    {#each [...credentials].reverse().slice(0, maxIndex) as cred}
         <div class="credential-card">
             <div class="cred-header">
                 Credential Subject:
-                {#if needSelection}
-                    <input
-                        type="checkbox"
-                        bind:checked={cred.selected}
-                        on:change={onGetSelection}
-                    />
-                {/if}
+                <div class="group-icon">
+                    <button
+                        class="icon-btn icon-btn-small"
+                        on:click={() => downloadJSON(cred, "credential.json")}
+                    >
+                        <img
+                            src="/assets/download.png"
+                            alt="download"
+                            class="icon"
+                        />
+                    </button>
+                    {#if needSelection}
+                        <input
+                            type="checkbox"
+                            bind:checked={cred.selected}
+                            on:change={onGetSelection}
+                        />
+                    {/if}
+                </div>
             </div>
 
             <div>
@@ -47,6 +62,14 @@
             </div>
         </div>
     {/each}
+    {#if credentials.length > maxIndex}
+        <button
+            class="secondary"
+            on:click={() => {
+                maxIndex += stepIndex;
+            }}>Load more...</button
+        >
+    {/if}
 {/if}
 
 <style>
@@ -70,6 +93,7 @@
         margin-bottom: 0.75rem;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     }
+
     .cred-meta {
         font-size: 13px;
         color: #3a3a3b;
@@ -86,5 +110,14 @@
     }
     .expire-date {
         font-weight: bold;
+    }
+
+    .group-icon {
+        display: flex;
+        column-gap: 5px;
+    }
+
+    input[type="checkbox"] {
+        width: 16px;
     }
 </style>

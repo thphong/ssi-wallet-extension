@@ -4,8 +4,6 @@
     import NoUser from "./pages/NoUser.svelte";
     import CreateDID from "./pages/CreateDID.svelte";
     import Credential from "./pages/Credential.svelte";
-    import CredentialNew from "./pages/CredentialNew.svelte";
-    import PresentationNew from "./pages/PresentationNew.svelte";
     import Presentation from "./pages/Presentation.svelte";
     import Verify from "./pages/Verify.svelte";
     import LockSession from "./pages/LockSession.svelte";
