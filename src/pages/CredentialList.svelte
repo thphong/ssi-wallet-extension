@@ -2,7 +2,13 @@
     import { type VC } from "did-core-sdk";
     import JsonViewer from "../components/JsonViewer.svelte";
     import { shortenDid, formatDate } from "../libs/utils";
-    export let credentials: VC[] = [];
+    export let credentials: any[] = [];
+    export let selectedVCs: VC[] = [];
+    export let needSelection = false;
+
+    function onGetSelection() {
+        selectedVCs = credentials.filter((item) => item.selected);
+    }
 </script>
 
 {#if credentials.length === 0}
@@ -12,7 +18,17 @@
 {:else}
     {#each credentials as cred}
         <div class="credential-card">
-            <div class="cred-meta">Credential Subject:</div>
+            <div class="cred-header">
+                Credential Subject:
+                {#if needSelection}
+                    <input
+                        type="checkbox"
+                        bind:checked={cred.selected}
+                        on:change={onGetSelection}
+                    />
+                {/if}
+            </div>
+
             <div>
                 <JsonViewer data={cred.credentialSubject} collapsedAt={1} />
             </div>
@@ -58,6 +74,14 @@
         font-size: 13px;
         color: #3a3a3b;
         display: grid;
+        justify-content: space-between;
+    }
+
+    .cred-header {
+        font-size: 13px;
+        color: #3a3a3b;
+        display: flex;
+        align-items: center;
         justify-content: space-between;
     }
     .expire-date {

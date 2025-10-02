@@ -6,5 +6,6 @@ export const ROUTES = {
     CREDENTIAL: "credential",
     CREDENTIAL_CREATE: "credential-create",
     PRESENTATION: "presentation",
+    PRESENTATION_CREATE: "presentation-create",
     VERIFY: "verify"
 }

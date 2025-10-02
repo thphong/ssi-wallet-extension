@@ -5,6 +5,7 @@
     import CreateDID from "./pages/CreateDID.svelte";
     import Credential from "./pages/Credential.svelte";
     import CredentialNew from "./pages/CredentialNew.svelte";
+    import PresentationNew from "./pages/PresentationNew.svelte";
     import Presentation from "./pages/Presentation.svelte";
     import Verify from "./pages/Verify.svelte";
     import LockSession from "./pages/LockSession.svelte";
@@ -143,11 +144,9 @@
             <div class="body-content">
                 {#if route === ROUTES.HOME}
                     <Home></Home>
-                {:else if route === ROUTES.CREDENTIAL}
+                {:else if route === ROUTES.CREDENTIAL || route === ROUTES.CREDENTIAL_CREATE}
                     <Credential bind:route></Credential>
-                {:else if route === ROUTES.CREDENTIAL_CREATE}
-                    <CredentialNew bind:route></CredentialNew>
-                {:else if route === ROUTES.PRESENTATION}
+                {:else if route === ROUTES.PRESENTATION || route === ROUTES.PRESENTATION_CREATE}
                     <Presentation bind:route></Presentation>
                 {:else if route === ROUTES.VERIFY}
                     <Verify></Verify>

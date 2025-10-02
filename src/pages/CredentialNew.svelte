@@ -87,7 +87,7 @@
         const vc = await createVC(dataInput, pk);
         await addOwnCredential(dataInput.issuer, vc);
         await addDeliveryCredential(dataInput.issuer, vc);
-        route = ROUTES.HOME;
+        route = ROUTES.CREDENTIAL;
     }
 </script>
 
