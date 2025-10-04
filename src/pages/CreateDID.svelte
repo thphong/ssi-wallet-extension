@@ -5,22 +5,28 @@
     import { type UserInput } from "../types/types";
     import { ROUTES } from "../types/enums";
     import { createUser } from "../did-interfaces/users";
+    import { didWeb } from "did-core-sdk";
 
     export let route: string;
 
     let dataInput: UserInput = {
         name: "",
-        didType: "key",
-        urlDid: "",
+        didType: "web",
+        didWeb: "",
     };
     let password = "";
     let rePassword = "";
     let submitting = false;
+    let isWebDidValid = true;
+    let isCheckingDid = false;
 
     $: isValidUserInfo =
         dataInput.name.trim().length > 0 &&
         (dataInput.didType != "web" ||
-            (dataInput.didType == "web" && dataInput.urlDid.trim().length > 0));
+            (dataInput.didType == "web" &&
+                dataInput.didWeb.trim().length > 0 &&
+                isWebDidValid &&
+                !isCheckingDid));
 
     $: isValidForm =
         isValidUserInfo && password == rePassword && !!password && !!rePassword;
@@ -35,6 +41,21 @@
         submitting = true;
         await createUser(dataInput, password);
         route = ROUTES.HOME;
+    }
+
+    async function onCheckWebDid() {
+        isWebDidValid = true;
+        isCheckingDid = true;
+        try {
+            const didDocument = await didWeb.resolve(dataInput.didWeb);
+            if (didDocument) {
+                isWebDidValid = true;
+            }
+        } catch {
+            isWebDidValid = false;
+        } finally {
+            isCheckingDid = false;
+        }
     }
 </script>
 
@@ -65,11 +86,16 @@
 
         {#if dataInput.didType == "web"}
             <TextInput
-                bind:value={dataInput.urlDid}
-                label={"DID Url"}
-                sublabel={"Url to resolve your did"}
-                placeholder={"e.g., https://yourorg.vn/.well-known/did.json"}
+                bind:value={dataInput.didWeb}
+                label={"Web Did"}
+                sublabel={"Your web did to resolve"}
+                placeholder={"e.g., did:web:yourorg.vn"}
                 readonlyCon={submitting}
+                on:change={onCheckWebDid}
+                errorMessage={!isWebDidValid &&
+                dataInput.didWeb.trim().length > 0
+                    ? "Can't resolve your web did"
+                    : ""}
             ></TextInput>
         {/if}
 
@@ -106,7 +132,9 @@
             placeholder={"Repeat your password"}
             readonlyCon={submitting}
             type="password"
-            errorMessage={!!rePassword && !!password && rePassword != password ? "Your passwords are not matched" : ""}
+            errorMessage={!!rePassword && !!password && rePassword != password
+                ? "Your passwords are not matched"
+                : ""}
         ></TextInput>
 
         <div class="form-buttons">

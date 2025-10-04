@@ -46,7 +46,7 @@ export async function createUser(user: UserInput, password: string): Promise<Use
         case "web":
             ({ did, doc } = await didWeb.create(
                 keyPair.publicKeyJwk,
-                user.urlDid,
+                user.didWeb,
             ));
             break;
         case "blockchain":

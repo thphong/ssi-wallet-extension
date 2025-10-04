@@ -49,9 +49,7 @@
             return;
         }
         try {
-            const res = await resolveDid(dataInput.subject, {
-                protocol: "http",
-            });
+            const res = await resolveDid(dataInput.subject);
             if (res) {
                 IsValidDid = true;
             } else {

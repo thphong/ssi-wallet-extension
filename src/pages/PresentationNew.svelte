@@ -3,14 +3,14 @@
     import PageHeader from "../components/PageHeader.svelte";
     import CredentialList from "./CredentialList.svelte";
     import { ROUTES } from "../types/enums";
-    import { createVP, type VC } from "did-core-sdk";
+    import { createVP } from "did-core-sdk";
     import { currentUser } from "../did-interfaces/users";
     import { loadPrivateKey } from "../did-interfaces/encrypt";
     import { addPresentation } from "../did-interfaces/presentation";
     import { getOwnCredentials } from "../did-interfaces/credential";
 
     export let route: string;
-    export let selectedVCs: VC[] = [];
+    export let selectedVCs: any[] = [];
 
     let password = "";
     let nonce = "";
@@ -48,7 +48,8 @@
         if (!isValidForm) return;
         submitting = true;
         const pk = await loadPrivateKey(holderDid, password);
-        const vp = await createVP(selectedVCs, holderDid, pk, nonce);
+        const vcs = selectedVCs.map(({ selected, ...rest }) => rest);
+        const vp = await createVP(vcs, holderDid, pk, nonce);
         await addPresentation(holderDid, vp);
         selectedVCs = [];
         await getOwnCredentials(holderDid);
