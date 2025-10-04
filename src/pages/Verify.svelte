@@ -22,7 +22,6 @@
             verifiedResult = await verifyVP(fileContent, nonce);
             errorMessage = "";
         } catch (error: any) {
-            console.log("error", error);
             errorMessage = error.message;
         } finally {
             submitting = false;
@@ -67,7 +66,9 @@
         <div class="verify-result">
             <img src="/assets/check.png" alt="sucess" class="res-icon" />
         </div>
-        <JsonViewer data={verifiedResult} collapsedAt={0} />
+        <div class="result-object">
+            <JsonViewer data={verifiedResult} collapsedAt={0} />
+        </div>
     {/if}
 </div>
 
@@ -75,5 +76,12 @@
     .verify-result {
         margin-top: -10px;
         text-align: center;
+    }
+
+    .result-object {
+        white-space: pre-wrap; /* keep indentation but allow wrapping */
+        overflow-wrap: anywhere; /* break very long tokens (e.g., JWS) */
+        word-break: break-word; /* fallback for older browsers */
+        line-break: anywhere;
     }
 </style>

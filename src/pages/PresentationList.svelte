@@ -1,6 +1,7 @@
 <script lang="ts">
     import { type VP } from "did-core-sdk";
     import JsonViewer from "../components/JsonViewer.svelte";
+    import { shortenDid } from "../libs/utils";
     import { downloadJSON } from "../libs/utils";
     export let presentations: VP[] = [];
     export let maxIndex = 1;
@@ -31,6 +32,11 @@
             {#each pre.verifiableCredential as vc}
                 <div>
                     <JsonViewer data={vc.credentialSubject} collapsedAt={1} />
+                </div>
+                <div class="cred-meta">
+                    <span class="cred-issuer"
+                        >Issuer: {shortenDid(vc.issuer, 31)}</span
+                    >
                 </div>
             {/each}
             <div class="cred-meta">
