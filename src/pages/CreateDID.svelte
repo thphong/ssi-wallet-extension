@@ -6,6 +6,7 @@
     import { ROUTES } from "../types/enums";
     import { createUser } from "../did-interfaces/users";
     import { didWeb } from "did-core-sdk";
+    import {} from "../did-interfaces/iota";
 
     export let route: string;
 
