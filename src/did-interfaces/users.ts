@@ -75,6 +75,14 @@ export async function createUser(user: UserInput, password: string): Promise<Use
     return userInfo;
 }
 
+export async function getPublicKey(did: string): Promise<JsonWebKey | undefined> {
+    return await dbInstance.getValue<JsonWebKey>(getKeyPublicKey(did));
+}
+
+export async function getDidDoc(did: string): Promise<DidDocument | undefined> {
+    return await dbInstance.getValue<DidDocument>(getKeyDidDoc(did));
+}
+
 async function getUsers(): Promise<UserInfo[]> {
 
     let users = await dbInstance.getValue<UserInfo[]>(KEY_LIST_USER);
