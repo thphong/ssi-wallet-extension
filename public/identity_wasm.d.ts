@@ -4,6 +4,7 @@
  * Initializes the console error panic hook for better error messages
  */
 export function start(): void;
+export function vctToUrl(resource: string): string | undefined;
 /**
  * Verify a JWS signature secured with the `EdDSA` algorithm and curve `Ed25519`.
  *
@@ -16,7 +17,6 @@ export function start(): void;
  * prior to calling the function.
  */
 export function verifyEd25519(alg: JwsAlgorithm, signingInput: Uint8Array, decodedSignature: Uint8Array, publicKey: Jwk): void;
-export function vctToUrl(resource: string): string | undefined;
 /**
  * Encode the given bytes in url-safe base64.
  */
@@ -81,7 +81,13 @@ export enum SerializationType {
   COMPACT = 0,
   JSON = 1,
 }
+/**
+ * Indicates the encoding of a DID document in state metadata.
+ */
 export enum StateMetadataEncoding {
+  /**
+   * State Metadata encoded as JSON.
+   */
   Json = 0,
 }
 /**
@@ -112,7 +118,13 @@ export enum StatusCheck {
  * Purpose of a {@link StatusList2021}.
  */
 export enum StatusPurpose {
+  /**
+   * Used for revocation.
+   */
   Revocation = 0,
+  /**
+   * Used for suspension.
+   */
   Suspension = 1,
 }
 /**
@@ -135,6 +147,27 @@ export enum SubjectHolderRelationship {
    */
   Any = 2,
 }
+interface ICoreDocument {
+  readonly id: string | CoreDID | IotaDID;
+  readonly controller?: (string | CoreDID | IotaDID)[];
+  readonly alsoKnownAs?: string[];
+  readonly verificationMethod?: (VerificationMethod)[];
+  readonly authentication?: (VerificationMethod | DIDUrl)[];
+  readonly assertionMethod?: (VerificationMethod | DIDUrl)[];
+  readonly keyAgreement?: (VerificationMethod | DIDUrl)[];
+  readonly capabilityDelegation?: (VerificationMethod | DIDUrl)[];
+  readonly capabilityInvocation?: (VerificationMethod | DIDUrl)[];
+  readonly service?: (Service)[];
+  readonly [properties: string]: unknown;
+}
+
+
+interface IToCoreDocument {
+
+  /** Returns a {@link CoreDocument} representation of this Document. */
+  toCoreDocument(): CoreDocument;
+}
+
 
 /** JPT claims */
 
@@ -155,40 +188,24 @@ interface JptClaims {
   readonly [properties: string]: any;
 }
 
-export type ResolutionHandlers = Map<string, (did: string) => Promise<CoreDocument | IToCoreDocument>>;
 
+import { TransactionDataBuilder, Argument } from "@iota/iota-sdk/transactions";
+import { IotaObjectData } from "@iota/iota-sdk/client";
 
 /**
- * Configurations for the {@link Resolver}.
+ * Closure needed to define what should be done with the borrowed objects.
  */
-export type ResolverConfig = {
-    /**
-     * Client for resolving DIDs of the iota method. 
-     */
-    client?: IIotaIdentityClient,
-
-    /**
-     * Handlers for resolving DIDs from arbitrary DID methods. 
-     * 
-     * The keys to the map are expected to match the method name and the values are asynchronous functions returning DID documents. 
-     * 
-     * Note that if a `client` is given the key "iota" may NOT be present in this map. 
-     */
-    handlers?: Map<string, (did: string) => Promise<CoreDocument | IToCoreDocument>>
-};
+export type BorrowFn = (tx: TransactionDataBuilder, objects: Map<string, [Argument, IotaObjectData]>) => void;
 
 
 
-interface SdJwtVcStatusListRef {
-  uri: string;
-  idx: number;
-}
+import { TransactionDataBuilder, Argument } from "@iota/iota-sdk/transactions";
+import { IotaObjectData } from "@iota/iota-sdk/client";
 
-type SdJwtVcStatus = { status_list: SdJwtVcStatusListRef } | unknown;
-
-
-
-import { JwsAlgorithm, JwkOperation, JwkUse, JwkType } from './jose/index';
+/**
+ * Closure that allows users to define what to do with the Identity's controller capability.
+ */
+export type ControllerExecutionFn = (tx: TransactionDataBuilder, capability: Argument) => void;
 
 
 /** Fields for constructing a new {@link Credential}. */
@@ -224,30 +241,25 @@ interface ICredential {
   readonly [properties: string]: unknown;
 }
 
-
-type SchemaByUri = { schema_uri: string, "schema_uri#integrity"?: string };
-type SchemaByObject = { schema: unknown, "schema#integrity"?: string };
-type NoSchema = {};
-type TypeSchema = SchemaByUri | SchemaByObject | NoSchema;
-
-type TypeMetadataHelper = {
-  name?: string;
-  description?: string;
-  extends?: string;
-  "extends#integrity"?: string;
-  display?: unknown[];
-  claims?: ClaimMetadata[];
-} & TypeSchema;
-
-
-
-interface SdJwtClaims {
-  _sd: string[];
-  _sd_alg?: string;
-  cnf?: RequiredKeyBinding;
-  [properties: string]: unknown;
+/** Fields for constructing a new {@link LinkedDomainService}. */
+interface ILinkedDomainService {
+  /** Service id. */
+  readonly id: DIDUrl;
+  /** A unique URI that may be used to identify the {@link Credential}. */
+  readonly domains: string[];
+  /** Miscellaneous properties. */
+  readonly [properties: string]: unknown;
 }
 
+/** Fields for constructing a new {@link LinkedVerifiablePresentationService}. */
+interface ILinkedVerifiablePresentationService {
+  /** Service id. */
+  readonly id: DIDUrl;
+  /** A unique URI that may be used to identify the {@link Credential}. */
+  readonly linked_vp: string | string[];
+  /** Miscellaneous properties. */
+  readonly [properties: string]: unknown;
+}
 
 /** Fields for constructing a new {@link Presentation}. */
 interface IPresentation {
@@ -270,13 +282,358 @@ interface IPresentation {
 }
 
 
-type ClaimPathSegment = string | number | null;
-type ClaimPath = ClaimPathSegment[];
+/**
+ * Base {@link Service} properties.
+ */
+interface IService {
+  /**
+   * Identifier of the service.
+   *
+   * Must be a valid DIDUrl with a fragment.
+   */
+    readonly id: DIDUrl | string;
+
+    /**
+     * Type of service.
+     *
+     * E.g. "LinkedDomains".
+     */
+    readonly type: string | string[];
+
+    /**
+     * A URL, set of URLs, or map of URL sets.
+     *
+     * NOTE: throws an error if any entry is not a valid URL string. List entries must be unique.
+     */
+    readonly serviceEndpoint: string | string[] | Map<string, string[]> | Record<string, string[]>;
+
+    /**
+     * Additional custom properties to embed in the service.
+     *
+     * WARNING: entries may overwrite existing fields and result in invalid documents.
+     */
+    readonly properties?: Map<string, any> | Record<string, any>;
+}
+
+
+interface SdJwtVcStatusListRef {
+  uri: string;
+  idx: number;
+}
+
+type SdJwtVcStatus = { status_list: SdJwtVcStatusListRef } | unknown;
 
 
 
-type ClaimDisclosability = "always" | "allowed" | "never";
+/** Information used to increase confidence in the claims of a {@link Credential}.
 
+[More Info](https://www.w3.org/TR/vc-data-model/#evidence) */
+interface Evidence {
+  /** A URL that allows retrieval of information about the evidence. */
+  readonly id?: string;
+  /** The type(s) of the credential evidence. */
+  readonly type: string | Array<string>;
+  /** Additional properties of the credential evidence. */
+  readonly [properties: string]: unknown;
+}
+
+
+/** An identifier representing the issuer of a {@link Credential}.
+
+[More Info](https://www.w3.org/TR/vc-data-model/#issuer) */
+interface Issuer {
+  /** A URL identifying the credential issuer. */
+  readonly id: string;
+  /** Additional properties of the credential issuer. */
+  readonly [properties: string]: unknown;
+}
+
+
+/** Information used to express obligations, prohibitions, and permissions about a {@link Credential} or {@link Presentation}.
+
+[More Info](https://www.w3.org/TR/vc-data-model/#terms-of-use) */
+interface Policy {
+  /** A URL identifying the credential terms-of-use. */
+  readonly id?: string;
+  /** The type(s) of the credential terms-of-use. */
+  readonly type: string | Array<string>;
+  /** Additional properties of the credential terms-of-use. */
+  readonly [properties: string]: unknown;
+}
+
+
+/** Information used to refresh or assert the status of a {@link Credential}.
+
+[More Info](https://www.w3.org/TR/vc-data-model/#refreshing) */
+interface RefreshService {
+  /** The URL of the credential refresh service. */
+  readonly id: string;
+  /** The type(s) of the credential refresh service. */
+  readonly type: string | Array<string>;
+  /** Additional properties of the credential refresh service. */
+  readonly [properties: string]: unknown;
+}
+
+
+/** Information used to validate the structure of a {@link Credential}.
+
+[More Info](https://www.w3.org/TR/vc-data-model/#data-schemas) */
+interface Schema {
+  /** A URL identifying the credential schema file. */
+  readonly id: string;
+  /** The type(s) of the credential schema. */
+  readonly type: string | Array<string>;
+  /** Additional properties of the credential schema. */
+  readonly [properties: string]: unknown;
+}
+
+
+/** Information used to determine the current status of a {@link Credential}.
+
+[More Info](https://www.w3.org/TR/vc-data-model/#status) */
+interface Status {
+  /** A URL identifying the credential status. */
+  readonly id: string;
+  /** The type of the credential status. */
+  readonly type: string;
+  /** Additional properties of the credential status. */
+  readonly [properties: string]: unknown;
+}
+
+
+/** An entity who is the target of a set of claims in a {@link Credential}.
+
+[More Info](https://www.w3.org/TR/vc-data-model/#credential-subject) */
+interface Subject {
+  /** A URI identifying the credential subject. */
+  readonly id?: string | CoreDID | IotaDID;
+  /** Additional properties of the credential subject. */
+  readonly [properties: string]: unknown;
+}
+
+export type ResolutionHandlers = Map<string, (did: string) => Promise<CoreDocument | IToCoreDocument>>;
+
+
+/**
+ * Configurations for the {@link Resolver}.
+ */
+export type ResolverConfig = {
+    /**
+     * Client for resolving DIDs of the iota method, usually an {@link IdentityClient} or an {@link IdentityClientReadOnly}
+     */
+    client?: WasmDidResolutionHandler,
+
+    /**
+     * Handlers for resolving DIDs from arbitrary DID methods. 
+     * 
+     * The keys to the map are expected to match the method name and the values are asynchronous functions returning DID documents. 
+     * 
+     * Note that if a `client` is given the key "iota" may NOT be present in this map. 
+     */
+    handlers?: Map<string, (did: string) => Promise<CoreDocument | IToCoreDocument>>
+};
+
+
+
+interface ISdJwtVcClaims {
+  iss: string;
+  vct: string;
+  status: SdJwtVcStatus;
+  nbf?: string;
+  exp?: string;
+  iat?: string;
+  sub?: string;
+}
+
+type SdJwtVcClaims = ISdJwtVcClaims & SdJwtClaims;
+
+
+
+import { JwsAlgorithm, JwkOperation, JwkUse, JwkType } from './jose/index';
+import {
+  Proposal,
+  ProposalOutput,
+  Transaction,
+  TransactionOutput,
+  TransactionBuilder,
+  SponsorFn,
+  ApproveProposal,
+  CreateProposal,
+  ExecuteProposal,
+  UpdateDid,
+  ProposalResult,
+  DelegatePermissions,
+  CoreClient,
+  CoreClientReadOnly,
+  SubAccessFn
+} from './index';
+
+
+
+/** Holds options to create a new {@link JptPresentationValidationOptions}. */
+interface IJptPresentationValidationOptions {
+    /**
+     * The nonce to be placed in the Presentation Protected Header.
+     */
+    readonly nonce?: string;
+
+    /**
+     * Options which affect the verification of the proof on the credential.
+     */
+    readonly verificationOptions?: JwpVerificationOptions;
+}
+
+
+/** Holds options to create a new `KeyBindingJWTValidationOptions`. */
+interface IKeyBindingJWTValidationOptions {
+    /**
+     * Validates the nonce value of the KB-JWT claims.
+     */
+    readonly nonce?: string;
+
+    /**
+     * Validates the `aud` properties in the KB-JWT claims.
+     */
+    readonly aud?: string;
+
+    /**
+     * Options which affect the verification of the signature on the KB-JWT.
+     */
+    readonly jwsOptions: JwsVerificationOptions;
+
+    /**
+     * Declares that the KB-JWT is considered invalid if the `iat` value in the claims
+     * is earlier than this timestamp.
+     */
+    readonly earliestIssuanceDate?: Timestamp;
+
+    /**
+     * Declares that the KB-JWT is considered invalid if the `iat` value in the claims is
+     * later than this timestamp.
+     *
+     * Uses the current timestamp during validation if not set.
+     */
+    readonly latestIssuanceDate?: Timestamp;
+
+}
+
+
+type Jwks = { jwks_uri: string } | { jwks: { keys: IJwk[] }};
+
+
+
+interface SdJwtClaims {
+  _sd: string[];
+  _sd_alg?: string;
+  cnf?: RequiredKeyBinding;
+  [properties: string]: unknown;
+}
+
+
+
+/** Holds options to create {@link JwsSignatureOptions}. */
+interface IJwsSignatureOptions {
+    /** Whether to attach the public key in the corresponding method
+     * to the JWS header.
+     * 
+     * Default: false
+     */
+    readonly attachJwk?: boolean;
+
+    /** Whether to Base64url encode the payload or not.
+     *
+     * [More Info](https://tools.ietf.org/html/rfc7797#section-3)
+     */
+    readonly b64?: boolean;
+
+    /** The Type value to be placed in the protected header.
+     * 
+     * [More Info](https://tools.ietf.org/html/rfc7515#section-4.1.9)
+     */
+    readonly typ?: string;
+
+    /** Content Type to be placed in the protected header.
+     * 
+     * [More Info](https://tools.ietf.org/html/rfc7515#section-4.1.10)
+     */
+    readonly cty?: string;
+
+    /** The URL to be placed in the protected header.
+     * 
+     * [More Info](https://tools.ietf.org/html/rfc8555#section-6.4.1)
+     */
+    readonly url?: string;
+
+    /** The nonce to be placed in the protected header.
+     * 
+     * [More Info](https://tools.ietf.org/html/rfc8555#section-6.5.2)
+     */
+    readonly nonce?: string;
+
+    /** The kid to set in the protected header.
+     * If unset, the kid of the JWK with which the JWS is produced is used.
+     * 
+     * [More Info](https://www.rfc-editor.org/rfc/rfc7515#section-4.1.4)
+     */
+    readonly kid?: string;
+
+    /**   /// Whether the payload should be detached from the JWS.
+     * 
+     * [More Info](https://www.rfc-editor.org/rfc/rfc7515#appendix-F).
+     */
+    readonly detachedPayload?: boolean
+
+    /**
+     * Additional header parameters.
+     */
+    readonly customHeaderParameters?: Record<string, any>;
+}
+
+
+/** Holds options to create a new {@link JwtCredentialValidationOptions}. */
+interface IJwtCredentialValidationOptions {
+    /** Declare that the credential is **not** considered valid if it expires before this {@link Timestamp}.
+     * Uses the current datetime during validation if not set. */
+    readonly earliestExpiryDate?: Timestamp;
+
+    /** Declare that the credential is **not** considered valid if it was issued later than this {@link Timestamp}.
+     * Uses the current datetime during validation if not set. */
+    readonly latestIssuanceDate?: Timestamp;
+
+    /** Validation behaviour for `credentialStatus`.
+     *
+     * Default: `StatusCheck.Strict`. */
+    readonly status?: StatusCheck;
+
+    /** Declares how credential subjects must relate to the presentation holder during validation.
+    *
+    * <https://www.w3.org/TR/vc-data-model/#subject-holder-relationships> */
+    readonly subjectHolderRelationship?: [string, SubjectHolderRelationship];
+
+    /** Options which affect the verification of the signature on the credential. */
+    readonly verifierOptions?: JwsVerificationOptions;
+}
+
+
+/** Holds options to create a new {@link JwtPresentationValidationOptions}. */
+interface IJwtPresentationValidationOptions {
+    /** 
+     * Options which affect the verification of the signature on the presentation. 
+     */
+    readonly presentationVerifierOptions?: JwsVerificationOptions;
+
+    /**
+     * Declare that the presentation is **not** considered valid if it expires before this {@link Timestamp}.
+     * Uses the current datetime during validation if not set. 
+     */
+    readonly earliestExpiryDate?: Timestamp;
+
+    /**
+     * Declare that the presentation is **not** considered valid if it was issued later than this {@link Timestamp}.
+     * Uses the current datetime during validation if not set. 
+     */
+    readonly latestIssuanceDate?: Timestamp;
+}
 
 
 /** Holds options to create {@link JwsVerificationOptions}. */
@@ -296,9 +653,150 @@ interface IJwsVerificationOptions {
     readonly methodId?: DIDUrl;
 }
 
-import type { AliasOutputBuilderParams, Address, IRent } from '@iota/sdk-wasm/web';
 
-import type { Block, INodeInfoProtocol } from '@iota/sdk-wasm/web';
+interface Hasher {
+  digest: (input: Uint8Array) => Uint8Array;
+  algName: () => string;
+  encodedDigest: (data: string) => string;
+}
+
+
+
+/**  Options to be set in the JWT claims of a verifiable presentation. */
+interface IJwtPresentationOptions {
+    /**
+     * Set the presentation's expiration date.
+     * Default: `undefined`.
+     **/
+    readonly expirationDate?: Timestamp;
+ 
+    /**
+     * Set the presentation's issuance date.
+     * Default: current datetime.
+     */
+    readonly issuanceDate?: Timestamp;
+
+    /**
+     * Sets the audience for presentation (`aud` property in JWT claims).
+     * 
+     * ## Note:
+     * Value must be a valid URL.
+     *
+     * Default: `undefined`.
+     */
+    readonly audience?: string;
+
+    /**
+     * Custom claims that can be used to set additional claims on the resulting JWT.
+     */
+    readonly customClaims?: Record<string, any>;
+}
+
+
+/** Interface for cryptographically verifying a JWS signature. 
+ * 
+ * Implementers are expected to provide a procedure for step 8 of [RFC 7515 section 5.2](https://www.rfc-editor.org/rfc/rfc7515#section-5.2) for 
+ * the JWS signature algorithms they want to support.
+*/
+interface IJwsVerifier {
+  /** Validate the `decodedSignature` against the `signingInput` in the manner defined by `alg` using the `publicKey`.
+   * 
+   *  See [RFC 7515: section 5.2 part 8.](https://www.rfc-editor.org/rfc/rfc7515#section-5.2) and
+   *  [RFC 7797 section 3](https://www.rfc-editor.org/rfc/rfc7797#section-3).
+   * 
+   * ### Failures
+   * Upon verification failure an error must be thrown.
+  */
+   verify: (alg: JwsAlgorithm, signingInput: Uint8Array, decodedSignature: Uint8Array, publicKey: Jwk) => void;
+}
+
+
+interface IToCoreDID {
+
+  /** Returns a {@link CoreDID} representation of this DID. */
+  toCoreDid(): CoreDID;
+}
+
+
+interface WasmDidResolutionHandler {
+  resolveDid: (did: IotaDID) => Promise<IotaDocument>;
+}
+
+
+
+/** Holds options to create a new {@link JptCredentialValidationOptions}. */
+interface IJptCredentialValidationOptions {
+    /**
+     * Declare that the credential is **not** considered valid if it expires before this {@link Timestamp}.
+     * Uses the current datetime during validation if not set. 
+     */
+    readonly earliestExpiryDate?: Timestamp;
+
+    /**
+     * Declare that the credential is **not** considered valid if it was issued later than this {@link Timestamp}.
+     * Uses the current datetime during validation if not set. 
+     */
+    readonly latestIssuanceDate?: Timestamp;
+
+    /**
+     * Validation behaviour for [`credentialStatus`](https://www.w3.org/TR/vc-data-model/#status).
+     */
+    readonly status?: StatusCheck;
+
+    /** Declares how credential subjects must relate to the presentation holder during validation.
+     *
+     * <https://www.w3.org/TR/vc-data-model/#subject-holder-relationships>
+     */
+    readonly subjectHolderRelationship?: [string, SubjectHolderRelationship];
+
+    /**
+     * Options which affect the verification of the proof on the credential.
+     */
+    readonly verificationOptions?: JwpVerificationOptions;
+}
+
+
+/** Holds options to create a new {@link JwpVerificationOptions}. */
+interface IJwpVerificationOptions {
+    /**
+     * Verify the signing verification method relation matches this.
+     */
+    readonly methodScope?: MethodScope;
+
+    /**
+     * The DID URL of the method, whose JWK should be used to verify the JWP.
+     * If unset, the `kid` of the JWP is used as the DID URL.
+     */
+    readonly methodId?: DIDUrl;
+}
+
+
+type SchemaByUri = { schema_uri: string, "schema_uri#integrity"?: string };
+type SchemaByObject = { schema: unknown, "schema#integrity"?: string };
+type NoSchema = {};
+type TypeSchema = SchemaByUri | SchemaByObject | NoSchema;
+
+type TypeMetadataHelper = {
+  name?: string;
+  description?: string;
+  extends?: string;
+  "extends#integrity"?: string;
+  display?: unknown[];
+  claims?: ClaimMetadata[];
+} & TypeSchema;
+
+
+/** Fields to create a new Domain Linkage {@link Credential}. */
+interface IDomainLinkageCredential {
+  /** A reference to the issuer of the {@link Credential}. */
+  readonly issuer: CoreDID | IotaDID;
+  /** A timestamp of when the {@link Credential} becomes valid. Defaults to the current datetime. */
+  readonly issuanceDate?: Timestamp;
+  /** A timestamp of when the {@link Credential} should no longer be considered valid. */
+  readonly expirationDate: Timestamp;
+  /** The origin, on which the {@link Credential} is issued. */
+  readonly origin: string;
+}
 
 
 type IJwkParams = IJwkEc | IJwkRsa | IJwkOkp | IJwkOct
@@ -498,432 +996,17 @@ interface JwkParamsOct {
 }
 
 
-/** Secure storage for cryptographic keys represented as JWKs. */
-interface JwkStorage {
-  /** Generate a new key represented as a JSON Web Key.
-   * 
-   * It's recommend that the implementer exposes constants for the supported key type string. */
-  generate: (keyType: string, algorithm: JwsAlgorithm) => Promise<JwkGenOutput>;
-  /** Insert an existing JSON Web Key into the storage.
-   * 
-   * All private key components of the `jwk` must be set. */
-  insert: (jwk: Jwk) => Promise<string>;
-  /** Sign the provided `data` using the private key identified by `keyId` according to the requirements of the given `public_key` corresponding to `keyId`. */
-  sign: (keyId: string, data: Uint8Array, publicKey: Jwk) => Promise<Uint8Array>;
-  /** Deletes the key identified by `keyId`.
-   * 
-   * # Warning
-   * 
-   * This operation cannot be undone. The keys are purged permanently. */
-  delete: (keyId: string) => Promise<void>;
-  /** Returns `true` if the key with the given `keyId` exists in storage, `false` otherwise. */
-  exists: (keyId: string) => Promise<boolean>;
-}
+type ClaimPathSegment = string | number | null;
+type ClaimPath = ClaimPathSegment[];
 
 
-/**  Options to be set in the JWT claims of a verifiable presentation. */
-interface IJwtPresentationOptions {
-    /**
-     * Set the presentation's expiration date.
-     * Default: `undefined`.
-     **/
-    readonly expirationDate?: Timestamp;
- 
-    /**
-     * Set the presentation's issuance date.
-     * Default: current datetime.
-     */
-    readonly issuanceDate?: Timestamp;
 
-    /**
-     * Sets the audience for presentation (`aud` property in JWT claims).
-     * 
-     * ## Note:
-     * Value must be a valid URL.
-     *
-     * Default: `undefined`.
-     */
-    readonly audience?: string;
+type ClaimDisclosability = "always" | "allowed" | "never";
 
-    /**
-     * Custom claims that can be used to set additional claims on the resulting JWT.
-     */
-    readonly customClaims?: Record<string, any>;
-}
 
 
-/** Holds options to create {@link JwsSignatureOptions}. */
-interface IJwsSignatureOptions {
-    /** Whether to attach the public key in the corresponding method
-     * to the JWS header.
-     * 
-     * Default: false
-     */
-    readonly attachJwk?: boolean;
-
-    /** Whether to Base64url encode the payload or not.
-     *
-     * [More Info](https://tools.ietf.org/html/rfc7797#section-3)
-     */
-    readonly b64?: boolean;
-
-    /** The Type value to be placed in the protected header.
-     * 
-     * [More Info](https://tools.ietf.org/html/rfc7515#section-4.1.9)
-     */
-    readonly typ?: string;
-
-    /** Content Type to be placed in the protected header.
-     * 
-     * [More Info](https://tools.ietf.org/html/rfc7515#section-4.1.10)
-     */
-    readonly cty?: string;
-
-    /** The URL to be placed in the protected header.
-     * 
-     * [More Info](https://tools.ietf.org/html/rfc8555#section-6.4.1)
-     */
-    readonly url?: string;
-
-    /** The nonce to be placed in the protected header.
-     * 
-     * [More Info](https://tools.ietf.org/html/rfc8555#section-6.5.2)
-     */
-    readonly nonce?: string;
-
-    /** The kid to set in the protected header.
-     * If unset, the kid of the JWK with which the JWS is produced is used.
-     * 
-     * [More Info](https://www.rfc-editor.org/rfc/rfc7515#section-4.1.4)
-     */
-    readonly kid?: string;
-
-    /**   /// Whether the payload should be detached from the JWS.
-     * 
-     * [More Info](https://www.rfc-editor.org/rfc/rfc7515#appendix-F).
-     */
-    readonly detachedPayload?: boolean
-
-    /**
-     * Additional header parameters.
-     */
-    readonly customHeaderParameters?: Record<string, any>;
-}
-
-
-/**
- * Base {@link Service} properties.
- */
-interface IService {
-  /**
-   * Identifier of the service.
-   *
-   * Must be a valid DIDUrl with a fragment.
-   */
-    readonly id: DIDUrl | string;
-
-    /**
-     * Type of service.
-     *
-     * E.g. "LinkedDomains".
-     */
-    readonly type: string | string[];
-
-    /**
-     * A URL, set of URLs, or map of URL sets.
-     *
-     * NOTE: throws an error if any entry is not a valid URL string. List entries must be unique.
-     */
-    readonly serviceEndpoint: string | string[] | Map<string, string[]> | Record<string, string[]>;
-
-    /**
-     * Additional custom properties to embed in the service.
-     *
-     * WARNING: entries may overwrite existing fields and result in invalid documents.
-     */
-    readonly properties?: Map<string, any> | Record<string, any>;
-}
-
-
-/** Interface for cryptographically verifying a JWS signature. 
- * 
- * Implementers are expected to provide a procedure for step 8 of [RFC 7515 section 5.2](https://www.rfc-editor.org/rfc/rfc7515#section-5.2) for 
- * the JWS signature algorithms they want to support.
-*/
-interface IJwsVerifier {
-  /** Validate the `decodedSignature` against the `signingInput` in the manner defined by `alg` using the `publicKey`.
-   * 
-   *  See [RFC 7515: section 5.2 part 8.](https://www.rfc-editor.org/rfc/rfc7515#section-5.2) and
-   *  [RFC 7797 section 3](https://www.rfc-editor.org/rfc/rfc7797#section-3).
-   * 
-   * ### Failures
-   * Upon verification failure an error must be thrown.
-  */
-   verify: (alg: JwsAlgorithm, signingInput: Uint8Array, decodedSignature: Uint8Array, publicKey: Jwk) => void;
-}
-
-/** Fields to create a new Domain Linkage {@link Credential}. */
-interface IDomainLinkageCredential {
-  /** A reference to the issuer of the {@link Credential}. */
-  readonly issuer: CoreDID | IotaDID;
-  /** A timestamp of when the {@link Credential} becomes valid. Defaults to the current datetime. */
-  readonly issuanceDate?: Timestamp;
-  /** A timestamp of when the {@link Credential} should no longer be considered valid. */
-  readonly expirationDate: Timestamp;
-  /** The origin, on which the {@link Credential} is issued. */
-  readonly origin: string;
-}
-
-
-/** Holds options to create a new `KeyBindingJWTValidationOptions`. */
-interface IKeyBindingJWTValidationOptions {
-    /**
-     * Validates the nonce value of the KB-JWT claims.
-     */
-    readonly nonce?: string;
-
-    /**
-     * Validates the `aud` properties in the KB-JWT claims.
-     */
-    readonly aud?: string;
-
-    /**
-     * Options which affect the verification of the signature on the KB-JWT.
-     */
-    readonly jwsOptions: JwsVerificationOptions;
-
-    /**
-     * Declares that the KB-JWT is considered invalid if the `iat` value in the claims
-     * is earlier than this timestamp.
-     */
-    readonly earliestIssuanceDate?: Timestamp;
-
-    /**
-     * Declares that the KB-JWT is considered invalid if the `iat` value in the claims is
-     * later than this timestamp.
-     *
-     * Uses the current timestamp during validation if not set.
-     */
-    readonly latestIssuanceDate?: Timestamp;
-
-}
-
-
-/** Holds options to create a new {@link JwtCredentialValidationOptions}. */
-interface IJwtCredentialValidationOptions {
-    /** Declare that the credential is **not** considered valid if it expires before this {@link Timestamp}.
-     * Uses the current datetime during validation if not set. */
-    readonly earliestExpiryDate?: Timestamp;
-
-    /** Declare that the credential is **not** considered valid if it was issued later than this {@link Timestamp}.
-     * Uses the current datetime during validation if not set. */
-    readonly latestIssuanceDate?: Timestamp;
-
-    /** Validation behaviour for `credentialStatus`.
-     *
-     * Default: `StatusCheck.Strict`. */
-    readonly status?: StatusCheck;
-
-    /** Declares how credential subjects must relate to the presentation holder during validation.
-    *
-    * <https://www.w3.org/TR/vc-data-model/#subject-holder-relationships> */
-    readonly subjectHolderRelationship?: [string, SubjectHolderRelationship];
-
-    /** Options which affect the verification of the signature on the credential. */
-    readonly verifierOptions?: JwsVerificationOptions;
-}
-
-
-/** Holds options to create a new {@link JwtPresentationValidationOptions}. */
-interface IJwtPresentationValidationOptions {
-    /** 
-     * Options which affect the verification of the signature on the presentation. 
-     */
-    readonly presentationVerifierOptions?: JwsVerificationOptions;
-
-    /**
-     * Declare that the presentation is **not** considered valid if it expires before this {@link Timestamp}.
-     * Uses the current datetime during validation if not set. 
-     */
-    readonly earliestExpiryDate?: Timestamp;
-
-    /**
-     * Declare that the presentation is **not** considered valid if it was issued later than this {@link Timestamp}.
-     * Uses the current datetime during validation if not set. 
-     */
-    readonly latestIssuanceDate?: Timestamp;
-}
-
-/** Fields for constructing a new {@link LinkedDomainService}. */
-interface ILinkedDomainService {
-  /** Service id. */
-  readonly id: DIDUrl;
-  /** A unique URI that may be used to identify the {@link Credential}. */
-  readonly domains: string[];
-  /** Miscellaneous properties. */
-  readonly [properties: string]: unknown;
-}
-
-/** Fields for constructing a new {@link LinkedVerifiablePresentationService}. */
-interface ILinkedVerifiablePresentationService {
-  /** Service id. */
-  readonly id: DIDUrl;
-  /** A unique URI that may be used to identify the {@link Credential}. */
-  readonly linked_vp: string | string[];
-  /** Miscellaneous properties. */
-  readonly [properties: string]: unknown;
-}
-
-
-interface IToCoreDID {
-
-  /** Returns a {@link CoreDID} representation of this DID. */
-  toCoreDid(): CoreDID;
-}
-
-interface ICoreDocument {
-  readonly id: string | CoreDID | IotaDID;
-  readonly controller?: (string | CoreDID | IotaDID)[];
-  readonly alsoKnownAs?: string[];
-  readonly verificationMethod?: (VerificationMethod)[];
-  readonly authentication?: (VerificationMethod | DIDUrl)[];
-  readonly assertionMethod?: (VerificationMethod | DIDUrl)[];
-  readonly keyAgreement?: (VerificationMethod | DIDUrl)[];
-  readonly capabilityDelegation?: (VerificationMethod | DIDUrl)[];
-  readonly capabilityInvocation?: (VerificationMethod | DIDUrl)[];
-  readonly service?: (Service)[];
-  readonly [properties: string]: unknown;
-}
-
-
-interface IToCoreDocument {
-
-  /** Returns a {@link CoreDocument} representation of this Document. */
-  toCoreDocument(): CoreDocument;
-}
-
-
-import type { AliasOutput } from '@iota/sdk-wasm/web';
-/** Helper interface necessary for `IotaIdentityClientExt`. */
-interface IIotaIdentityClient {
-
-  /** Resolve an Alias identifier, returning its latest `OutputId` and `AliasOutput`. */
-  getAliasOutput(aliasId: string): Promise<[string, AliasOutput]>;
-
-  /** Returns the protocol parameters. */
-  getProtocolParameters(): Promise<INodeInfoProtocol>; 
-}
-
-
-interface ISdJwtVcClaims {
-  iss: string;
-  vct: string;
-  status: SdJwtVcStatus;
-  nbf?: string;
-  exp?: string;
-  iat?: string;
-  sub?: string;
-}
-
-type SdJwtVcClaims = ISdJwtVcClaims & SdJwtClaims;
-
-
-
-/** Information used to increase confidence in the claims of a {@link Credential}.
-
-[More Info](https://www.w3.org/TR/vc-data-model/#evidence) */
-interface Evidence {
-  /** A URL that allows retrieval of information about the evidence. */
-  readonly id?: string;
-  /** The type(s) of the credential evidence. */
-  readonly type: string | Array<string>;
-  /** Additional properties of the credential evidence. */
-  readonly [properties: string]: unknown;
-}
-
-
-/** An identifier representing the issuer of a {@link Credential}.
-
-[More Info](https://www.w3.org/TR/vc-data-model/#issuer) */
-interface Issuer {
-  /** A URL identifying the credential issuer. */
-  readonly id: string;
-  /** Additional properties of the credential issuer. */
-  readonly [properties: string]: unknown;
-}
-
-
-/** Information used to express obligations, prohibitions, and permissions about a {@link Credential} or {@link Presentation}.
-
-[More Info](https://www.w3.org/TR/vc-data-model/#terms-of-use) */
-interface Policy {
-  /** A URL identifying the credential terms-of-use. */
-  readonly id?: string;
-  /** The type(s) of the credential terms-of-use. */
-  readonly type: string | Array<string>;
-  /** Additional properties of the credential terms-of-use. */
-  readonly [properties: string]: unknown;
-}
-
-
-/** Information used to refresh or assert the status of a {@link Credential}.
-
-[More Info](https://www.w3.org/TR/vc-data-model/#refreshing) */
-interface RefreshService {
-  /** The URL of the credential refresh service. */
-  readonly id: string;
-  /** The type(s) of the credential refresh service. */
-  readonly type: string | Array<string>;
-  /** Additional properties of the credential refresh service. */
-  readonly [properties: string]: unknown;
-}
-
-
-/** Information used to validate the structure of a {@link Credential}.
-
-[More Info](https://www.w3.org/TR/vc-data-model/#data-schemas) */
-interface Schema {
-  /** A URL identifying the credential schema file. */
-  readonly id: string;
-  /** The type(s) of the credential schema. */
-  readonly type: string | Array<string>;
-  /** Additional properties of the credential schema. */
-  readonly [properties: string]: unknown;
-}
-
-
-/** Information used to determine the current status of a {@link Credential}.
-
-[More Info](https://www.w3.org/TR/vc-data-model/#status) */
-interface Status {
-  /** A URL identifying the credential status. */
-  readonly id: string;
-  /** The type of the credential status. */
-  readonly type: string;
-  /** Additional properties of the credential status. */
-  readonly [properties: string]: unknown;
-}
-
-
-/** An entity who is the target of a set of claims in a {@link Credential}.
-
-[More Info](https://www.w3.org/TR/vc-data-model/#credential-subject) */
-interface Subject {
-  /** A URI identifying the credential subject. */
-  readonly id?: string | CoreDID | IotaDID;
-  /** Additional properties of the credential subject. */
-  readonly [properties: string]: unknown;
-}
-
-
-type Jwks = { jwks_uri: string } | { jwks: { keys: IJwk[] }};
-
-
-
-interface Hasher {
-  digest: (input: Uint8Array) => Uint8Array;
-  algName: () => string;
-  encodedDigest: (data: string) => string;
+interface IResolver<I, T> {
+  resolve: (input: I) => Promise<T>;
 }
 
 
@@ -946,77 +1029,33 @@ interface KeyBindingJwtClaimsV2 {
 
 
 
-/** Holds options to create a new {@link JptCredentialValidationOptions}. */
-interface IJptCredentialValidationOptions {
-    /**
-     * Declare that the credential is **not** considered valid if it expires before this {@link Timestamp}.
-     * Uses the current datetime during validation if not set. 
-     */
-    readonly earliestExpiryDate?: Timestamp;
-
-    /**
-     * Declare that the credential is **not** considered valid if it was issued later than this {@link Timestamp}.
-     * Uses the current datetime during validation if not set. 
-     */
-    readonly latestIssuanceDate?: Timestamp;
-
-    /**
-     * Validation behaviour for [`credentialStatus`](https://www.w3.org/TR/vc-data-model/#status).
-     */
-    readonly status?: StatusCheck;
-
-    /** Declares how credential subjects must relate to the presentation holder during validation.
-     *
-     * <https://www.w3.org/TR/vc-data-model/#subject-holder-relationships>
-     */
-    readonly subjectHolderRelationship?: [string, SubjectHolderRelationship];
-
-    /**
-     * Options which affect the verification of the proof on the credential.
-     */
-    readonly verificationOptions?: JwpVerificationOptions;
-}
-
-
-/** Holds options to create a new {@link JwpVerificationOptions}. */
-interface IJwpVerificationOptions {
-    /**
-     * Verify the signing verification method relation matches this.
-     */
-    readonly methodScope?: MethodScope;
-
-    /**
-     * The DID URL of the method, whose JWK should be used to verify the JWP.
-     * If unset, the `kid` of the JWP is used as the DID URL.
-     */
-    readonly methodId?: DIDUrl;
-}
-
-
-/** Holds options to create a new {@link JptPresentationValidationOptions}. */
-interface IJptPresentationValidationOptions {
-    /**
-     * The nonce to be placed in the Presentation Protected Header.
-     */
-    readonly nonce?: string;
-
-    /**
-     * Options which affect the verification of the proof on the credential.
-     */
-    readonly verificationOptions?: JwpVerificationOptions;
-}
-
-
-interface IResolver<I, T> {
-  resolve: (input: I) => Promise<T>;
-}
-
-
-
 interface JwsSigner {
   sign: (header: object, payload: object) => Promise<Uint8Array>;
 }
 
+
+
+/** Secure storage for cryptographic keys represented as JWKs. */
+interface JwkStorage {
+  /** Generate a new key represented as a JSON Web Key.
+   * 
+   * It's recommend that the implementer exposes constants for the supported key type string. */
+  generate: (keyType: string, algorithm: JwsAlgorithm) => Promise<JwkGenOutput>;
+  /** Insert an existing JSON Web Key into the storage.
+   * 
+   * All private key components of the `jwk` must be set. */
+  insert: (jwk: Jwk) => Promise<string>;
+  /** Sign the provided `data` using the private key identified by `keyId` according to the requirements of the given `public_key` corresponding to `keyId`. */
+  sign: (keyId: string, data: Uint8Array, publicKey: Jwk) => Promise<Uint8Array>;
+  /** Deletes the key identified by `keyId`.
+   * 
+   * # Warning
+   * 
+   * This operation cannot be undone. The keys are purged permanently. */
+  delete: (keyId: string) => Promise<void>;
+  /** Returns `true` if the key with the given `keyId` exists in storage, `false` otherwise. */
+  exists: (keyId: string) => Promise<boolean>;
+}
 
 
 /**
@@ -1044,6 +1083,142 @@ interface KeyIdStorage {
   deleteKeyId: (methodDigest: MethodDigest) => Promise<void>;
 }
 
+
+import { Request, Response } from "@iota/iota_interaction_ts/http_client";
+
+
+
+  import {
+    Balance,
+    ExecuteTransactionBlockParams,
+    GetCoinsParams,
+    GetDynamicFieldObjectParams,
+    GetObjectParams,
+    GetOwnedObjectsParams,
+    GetTransactionBlockParams,
+    IotaClient,
+    IotaObjectData,
+    IotaObjectResponse,
+    IotaTransactionBlockResponse,
+    IotaTransactionBlockResponseOptions,
+    ObjectRead,
+    PaginatedCoins,
+    PaginatedEvents,
+    PaginatedObjectsResponse,
+    QueryEventsParams,
+    TryGetPastObjectParams,
+    DevInspectTransactionBlockParams,
+    DevInspectResults
+  } from "@iota/iota-sdk/client";
+  import { bcs } from "@iota/iota-sdk/bcs";
+  import {
+    executeTransaction,
+    WasmIotaTransactionBlockResponseWrapper,
+  } from "./iota_client_helpers"
+
+
+
+import { PublicKey } from "@iota/iota-sdk/cryptography";
+
+interface TransactionSigner {
+  sign: (tx_data_bcs: Uint8Array) => Promise<string>;
+  publicKey: () => Promise<PublicKey>;
+  iotaPublicKeyBytes: () => Promise<Uint8Array>;
+  keyId: () => string;
+}
+
+
+/**
+ * Action to access an Identity controlled by another Identity.
+ */
+export class AccessSubIdentity {
+/**
+** Return copy of self without private attributes.
+*/
+  toJSON(): Object;
+/**
+* Return stringified version of self.
+*/
+  toString(): string;
+  free(): void;
+  constructor(identity: string, sub_identity: string);
+  toJSON(): any;
+  /**
+   * Object ID of the Identity whose token will be used.
+   */
+  identity: string;
+  /**
+   * Object ID of the sub-Identity that will be accessed.
+   */
+  sub_identity: string;
+}
+export class AccessSubIdentityProposal {
+  private constructor();
+  free(): void;
+  approve(identity: OnChainIdentity, controller_token: ControllerToken): TransactionBuilder<ApproveProposal>;
+  readonly id: string;
+  readonly action: AccessSubIdentity;
+  readonly expiration_epoch: bigint | undefined;
+  readonly votes: bigint;
+  readonly voters: Set<string>;
+}
+export class ApproveBorrowProposal {
+  private constructor();
+  free(): void;
+  buildProgrammableTransaction(client: CoreClientReadOnly): Promise<Uint8Array>;
+  apply(wasm_effects: TransactionEffects, client: CoreClientReadOnly): Promise<void>;
+}
+export class ApproveConfigChangeProposal {
+  private constructor();
+  free(): void;
+  buildProgrammableTransaction(client: CoreClientReadOnly): Promise<Uint8Array>;
+  apply(wasm_effects: TransactionEffects, client: CoreClientReadOnly): Promise<void>;
+}
+export class ApproveControllerExecutionProposal {
+  private constructor();
+  free(): void;
+  buildProgrammableTransaction(client: CoreClientReadOnly): Promise<Uint8Array>;
+  apply(wasm_effects: TransactionEffects, client: CoreClientReadOnly): Promise<void>;
+}
+export class ApproveSendProposal {
+  private constructor();
+  free(): void;
+  buildProgrammableTransaction(client: CoreClientReadOnly): Promise<Uint8Array>;
+  apply(wasm_effects: TransactionEffects, client: CoreClientReadOnly): Promise<void>;
+}
+export class ApproveUpdateDidDocumentProposal {
+  private constructor();
+  free(): void;
+  buildProgrammableTransaction(client: CoreClientReadOnly): Promise<Uint8Array>;
+  apply(wasm_effects: TransactionEffects, client: CoreClientReadOnly): Promise<void>;
+}
+export class Borrow {
+/**
+** Return copy of self without private attributes.
+*/
+  toJSON(): Object;
+/**
+* Return stringified version of self.
+*/
+  toString(): string;
+  free(): void;
+  constructor(objects: string[], borrow_fn?: BorrowFn | null);
+  get borrow_fn(): BorrowFn | undefined;
+  set borrow_fn(value: BorrowFn | null | undefined);
+  readonly objects: string[];
+}
+export class BorrowProposal {
+  private constructor();
+  free(): void;
+  approve(identity: OnChainIdentity, controller_token: ControllerToken): TransactionBuilder<ApproveProposal>;
+  intoTx(identity: OnChainIdentity, controller_token: ControllerToken): TransactionBuilder<ExecuteProposal<Borrow>>;
+  readonly id: string;
+  readonly action: Borrow;
+  readonly expiration_epoch: bigint | undefined;
+  readonly votes: bigint;
+  readonly voters: Set<string>;
+  set borrowFn(value: BorrowFn);
+}
 export class ClaimDisplay {
   private constructor();
 /**
@@ -1089,6 +1264,109 @@ export class ClaimMetadata {
   set sd(value: ClaimDisclosability | null | undefined);
   get svg_id(): string | undefined;
   set svg_id(value: string | null | undefined);
+}
+export class ConfigChange {
+  private constructor();
+/**
+** Return copy of self without private attributes.
+*/
+  toJSON(): Object;
+/**
+* Return stringified version of self.
+*/
+  toString(): string;
+  free(): void;
+  get threshold(): bigint | undefined;
+  set threshold(value: bigint | null | undefined);
+  get controllersToAdd(): Map<string, number> | undefined;
+  set controllersToAdd(value: Map<string, number> | null | undefined);
+  get controllersToRemove(): Set<string> | undefined;
+  set controllersToRemove(value: Set<string> | null | undefined);
+  get controllersToUpdate(): Map<string, number> | undefined;
+  set controllersToUpdate(value: Map<string, number> | null | undefined);
+}
+export class ConfigChangeProposal {
+  private constructor();
+  free(): void;
+  approve(identity: OnChainIdentity, controller_token: ControllerToken): TransactionBuilder<ApproveProposal>;
+  intoTx(identity: OnChainIdentity, controller_token: ControllerToken): TransactionBuilder<ExecuteProposal<ConfigChange>>;
+  readonly id: string;
+  readonly action: ConfigChange;
+  readonly expiration_epoch: bigint | undefined;
+  readonly votes: bigint;
+  readonly voters: Set<string>;
+}
+export class ControllerAndVotingPower {
+  free(): void;
+  constructor(address: string, voting_power: bigint, can_delegate: boolean);
+  0: string;
+  1: bigint;
+  2: boolean;
+}
+/**
+ * A token that authenticates its bearer as a controller of a specific shared object.
+ */
+export class ControllerCap {
+  private constructor();
+  free(): void;
+  /**
+   * If this token can be delegated, this function will return
+   * a {@link DelegationToken} Transaction that will mint a new {@link DelegationToken}
+   * and send it to `recipient`.
+   */
+  delegate(recipient: string, permissions: DelegatePermissions | undefined | null): TransactionBuilder;
+  /**
+   * Returns the ID of this {@link ControllerCap}.
+   */
+  readonly id: string;
+  /**
+   * Returns the ID of the object this token controls.
+   */
+  readonly controllerOf: string;
+  /**
+   * Returns whether this controller is allowed to delegate
+   * its access to the controlled object.
+   */
+  readonly canDelegate: boolean;
+}
+export class ControllerExecution {
+/**
+** Return copy of self without private attributes.
+*/
+  toJSON(): Object;
+/**
+* Return stringified version of self.
+*/
+  toString(): string;
+  free(): void;
+  constructor(controller_cap: string, identity: OnChainIdentity, exec_fn?: ControllerExecutionFn | null);
+  get controller_exec_fn(): ControllerExecutionFn | undefined;
+  set controller_exec_fn(value: ControllerExecutionFn | null | undefined);
+  readonly controllerCap: string;
+  readonly identityAddress: string;
+}
+export class ControllerExecutionProposal {
+  private constructor();
+  free(): void;
+  approve(identity: OnChainIdentity, controller_token: ControllerToken): TransactionBuilder<ApproveProposal>;
+  intoTx(identity: OnChainIdentity, controller_token: ControllerToken): TransactionBuilder<ExecuteProposal<ControllerExecution>>;
+  readonly id: string;
+  readonly action: ControllerExecution;
+  readonly expiration_epoch: bigint | undefined;
+  readonly votes: bigint;
+  readonly voters: Set<string>;
+  set execFn(value: ControllerExecutionFn);
+}
+export class ControllerToken {
+  private constructor();
+  free(): void;
+  static fromControllerCap(cap: ControllerCap): ControllerToken;
+  static fromDelegationToken(token: DelegationToken): ControllerToken;
+  id(): string;
+  controllerOf(): string;
+  toControllerCap(): ControllerCap | undefined;
+  toDelegationToken(): DelegationToken | undefined;
+  static getById(id: string, client: CoreClientReadOnly): Promise<ControllerToken>;
 }
 /**
  * A method-agnostic Decentralized Identifier (DID).
@@ -1430,6 +1708,45 @@ export class CoreDocument {
    */
   static expandDIDJwk(did: DIDJwk): CoreDocument;
 }
+export class CreateBorrowProposal {
+  private constructor();
+  free(): void;
+  buildProgrammableTransaction(client: CoreClientReadOnly): Promise<Uint8Array>;
+  apply(wasm_effects: TransactionEffects, client: CoreClientReadOnly): Promise<ProposalResult<Borrow>>;
+}
+export class CreateConfigChangeProposal {
+  private constructor();
+  free(): void;
+  buildProgrammableTransaction(client: CoreClientReadOnly): Promise<Uint8Array>;
+  apply(wasm_effects: TransactionEffects, client: CoreClientReadOnly): Promise<ProposalResult<ConfigChange>>;
+}
+export class CreateControllerExecutionProposal {
+  private constructor();
+  free(): void;
+  buildProgrammableTransaction(client: CoreClientReadOnly): Promise<Uint8Array>;
+  apply(wasm_effects: TransactionEffects, client: CoreClientReadOnly): Promise<ProposalResult<ControllerExecution>>;
+}
+export class CreateIdentity {
+  free(): void;
+  constructor(builder: IdentityBuilder);
+  buildProgrammableTransaction(client: CoreClientReadOnly): Promise<Uint8Array>;
+  apply(wasm_effects: TransactionEffects, client: CoreClientReadOnly): Promise<OnChainIdentity>;
+}
+export class CreateSendProposal {
+  private constructor();
+  free(): void;
+  buildProgrammableTransaction(client: CoreClientReadOnly): Promise<Uint8Array>;
+  apply(wasm_effects: TransactionEffects, client: CoreClientReadOnly): Promise<ProposalResult<SendProposal>>;
+}
+export class CreateUpdateDidProposal {
+  private constructor();
+  free(): void;
+  buildProgrammableTransaction(client: CoreClientReadOnly): Promise<Uint8Array>;
+  apply(wasm_effects: TransactionEffects, client: CoreClientReadOnly): Promise<ProposalResult<UpdateDid>>;
+}
+/**
+ * Represents a set of claims describing an entity.
+ */
 export class Credential {
 /**
 ** Return copy of self without private attributes.
@@ -1867,6 +2184,74 @@ export class DecodedJwtPresentation {
   customClaims(): Record<string, any> | undefined;
 }
 /**
+ * A default implementation for {@link HttpClient}.
+ */
+export class DefaultHttpClient {
+  free(): void;
+  constructor();
+  send(request: Request): Promise<Response>;
+}
+export class DelegateToken {
+  free(): void;
+  constructor(controller_cap: ControllerCap, recipient: string, permissions: DelegatePermissions | undefined | null);
+  buildProgrammableTransaction(client: IdentityClientReadOnly): Promise<Uint8Array>;
+  apply(wasm_effects: TransactionEffects, client: IdentityClientReadOnly): Promise<DelegationToken>;
+}
+/**
+ * A token minted by a controller that allows another entity to act in
+ * its stead - with full or reduced permissions.
+ */
+export class DelegationToken {
+  private constructor();
+  free(): void;
+  /**
+   * Returns the ID of this {@link DelegationToken}.
+   */
+  readonly id: string;
+  /**
+   * Returns the ID of the {@link ControllerCap} that minted
+   * this {@link DelegationToken}.
+   */
+  readonly controller: string;
+  /**
+   * Returns the ID of the object this token controls.
+   */
+  readonly controllerOf: string;
+  /**
+   * Returns the permissions of this token.
+   */
+  readonly permissions: DelegatePermissions;
+}
+/**
+ * Transaction for revoking / unrevoking a {@link DelegationToken}.
+ * If no `revoke` parameter is passed, or `true` is passed, this transaction
+ * will *revoke* the passed token - *unrevoke* otherwise.
+ */
+export class DelegationTokenRevocation {
+  free(): void;
+  constructor(identity: OnChainIdentity, controller_cap: ControllerCap, delegation_token: DelegationToken, revoke?: boolean | null);
+  /**
+   * Returns whether this transaction will revoke the given token.
+   */
+  isRevocation(): boolean;
+  /**
+   * Returns the ID of the token handled by this transaction.
+   */
+  tokenId(): string;
+  buildProgrammableTransaction(client: IdentityClientReadOnly): Promise<Uint8Array>;
+  apply(wasm_effects: TransactionEffects, client: IdentityClientReadOnly): Promise<void>;
+}
+/**
+ * A transaction to delete a given {@link DelegationToken}.
+ */
+export class DeleteDelegationToken {
+  free(): void;
+  constructor(identity: OnChainIdentity, delegation_token: DelegationToken);
+  tokenId(): string;
+  buildProgrammableTransaction(client: IdentityClientReadOnly): Promise<Uint8Array>;
+  apply(wasm_effects: TransactionEffects, client: IdentityClientReadOnly): Promise<void>;
+}
+/**
  * Represents an elements constructing a disclosure.
  * Object properties and array elements disclosures are supported.
  *
@@ -2079,6 +2464,115 @@ export class EdDSAJwsVerifier {
    */
   verify(alg: JwsAlgorithm, signingInput: Uint8Array, decodedSignature: Uint8Array, publicKey: Jwk): void;
 }
+export class ExecuteBorrowProposal {
+  private constructor();
+  free(): void;
+  static new(proposal: BorrowProposal, identity: OnChainIdentity, controller_token: ControllerToken): ExecuteBorrowProposal;
+  buildProgrammableTransaction(client: CoreClientReadOnly): Promise<Uint8Array>;
+  apply(wasm_effects: TransactionEffects, client: CoreClientReadOnly): Promise<void>;
+}
+export class ExecuteConfigChangeProposal {
+  private constructor();
+  free(): void;
+  buildProgrammableTransaction(client: CoreClientReadOnly): Promise<Uint8Array>;
+  apply(wasm_effects: TransactionEffects, client: CoreClientReadOnly): Promise<void>;
+}
+export class ExecuteControllerExecutionProposal {
+  private constructor();
+  free(): void;
+  static new(proposal: ControllerExecutionProposal, identity: OnChainIdentity, controller_token: ControllerToken): ExecuteControllerExecutionProposal;
+  buildProgrammableTransaction(client: CoreClientReadOnly): Promise<Uint8Array>;
+  apply(wasm_effects: TransactionEffects, client: CoreClientReadOnly): Promise<void>;
+}
+export class ExecuteSendProposal {
+  private constructor();
+  free(): void;
+  buildProgrammableTransaction(client: CoreClientReadOnly): Promise<Uint8Array>;
+  apply(wasm_effects: TransactionEffects, client: CoreClientReadOnly): Promise<void>;
+}
+export class ExecuteUpdateDidProposal {
+  private constructor();
+  free(): void;
+  static new(proposal: UpdateDidProposal, identity: OnChainIdentity, controller_token: ControllerToken): ExecuteUpdateDidProposal;
+  buildProgrammableTransaction(client: CoreClientReadOnly): Promise<Uint8Array>;
+  apply(wasm_effects: TransactionEffects, client: CoreClientReadOnly): Promise<void>;
+}
+export class GasStationParams {
+  free(): void;
+  constructor(params?: GasStationParamsI | null);
+  /**
+   * Adds an `Authorization` header using `token` as a bearer token.
+   */
+  withAuthToken(token: string): GasStationParams;
+  readonly gasReservationDuration: bigint;
+  readonly headers: HeaderMap;
+}
+export class Identity {
+  private constructor();
+  free(): void;
+  /**
+   * TODO: check if we can actually do this like this w/o consuming the container on the 1st try
+   * TODO: add support for unmigrated aliases
+   */
+  toFullFledged(): OnChainIdentity | undefined;
+}
+export class IdentityBuilder {
+  free(): void;
+  constructor(did_doc: IotaDocument);
+  controller(address: string, voting_power: bigint, can_delegate?: boolean | null): IdentityBuilder;
+  threshold(threshold: bigint): IdentityBuilder;
+  controllers(controllers: ControllerAndVotingPower[]): IdentityBuilder;
+  finish(): TransactionBuilder<CreateIdentity>;
+}
+/**
+ * A client to interact with identities on the IOTA chain.
+ *
+ * Used for read and write operations. If you just want read capabilities,
+ * you can also use {@link IdentityClientReadOnly}, which does not need an account and signing capabilities.
+ */
+export class IdentityClient {
+  free(): void;
+  /**
+   * @deprecated Use `IdentityClient.create` instead.
+   */
+  constructor();
+  static create(client: IdentityClientReadOnly, signer: TransactionSigner): Promise<IdentityClient>;
+  senderPublicKey(): PublicKey;
+  senderAddress(): string;
+  network(): string;
+  createIdentity(iota_document: IotaDocument): IdentityBuilder;
+  getIdentity(object_id: string): Promise<Identity>;
+  packageId(): string;
+  packageHistory(): string[];
+  resolveDid(did: IotaDID): Promise<IotaDocument>;
+  publishDidDocument(document: IotaDocument, controller: string): TransactionBuilder<PublishDidDocument>;
+  publishDidDocumentUpdate(document: IotaDocument, gas_budget: bigint): Promise<IotaDocument>;
+  deactivateDidOutput(did: IotaDID, gas_budget: bigint): Promise<void>;
+  iotaClient(): IotaClient;
+  signer(): TransactionSigner;
+  readOnly(): IdentityClientReadOnly;
+}
+/**
+ * A client to interact with identities on the IOTA chain.
+ *
+ * Used for read operations, so does not need an account and signing capabilities.
+ * If you want to write to the chain, use {@link IdentityClient}.
+ */
+export class IdentityClientReadOnly {
+  free(): void;
+  /**
+   * @deprecated Use `IdentityClientReadOnly.create` instead.
+   */
+  constructor();
+  static create(iota_client: IotaClient): Promise<IdentityClientReadOnly>;
+  static createWithPkgId(iota_client: IotaClient, iota_identity_pkg_id: string): Promise<IdentityClientReadOnly>;
+  packageId(): string;
+  packageHistory(): string[];
+  iotaClient(): IotaClient;
+  network(): string;
+  resolveDid(did: IotaDID): Promise<IotaDocument>;
+  getIdentity(object_id: string): Promise<Identity>;
+}
 /**
  * A DID conforming to the IOTA DID method specification.
  *
@@ -2105,7 +2599,7 @@ export class IotaDID {
    * Constructs a new {@link IotaDID} from a hex representation of an Alias Id and the given
    * network name.
    */
-  static fromAliasId(aliasId: string, network: string): IotaDID;
+  static fromAliasId(objectId: string, network: string): IotaDID;
   /**
    * Creates a new placeholder {@link IotaDID} with the given network name.
    *
@@ -2331,34 +2825,14 @@ export class IotaDocument {
    */
   verifyJws(jws: Jws, options: JwsVerificationOptions, signatureVerifier?: IJwsVerifier | null, detachedPayload?: string | null): DecodedJws;
   /**
-   * Serializes the document for inclusion in an Alias Output's state metadata
+   * Serializes the document for inclusion in an identity's metadata
    * with the default {@link StateMetadataEncoding}.
    */
   pack(): Uint8Array;
   /**
-   * Serializes the document for inclusion in an Alias Output's state metadata.
+   * Serializes the document for inclusion in an identity's metadata.
    */
   packWithEncoding(encoding: StateMetadataEncoding): Uint8Array;
-  /**
-   * Deserializes the document from an Alias Output.
-   *
-   * If `allowEmpty` is true, this will return an empty DID document marked as `deactivated`
-   * if `stateMetadata` is empty.
-   *
-   * The `tokenSupply` must be equal to the token supply of the network the DID is associated with.  
-   *
-   * NOTE: `did` is required since it is omitted from the serialized DID Document and
-   * cannot be inferred from the state metadata. It also indicates the network, which is not
-   * encoded in the `AliasId` alone.
-   */
-  static unpackFromOutput(did: IotaDID, aliasOutput: AliasOutputBuilderParams, allowEmpty: boolean): IotaDocument;
-  /**
-   * Returns all DID documents of the Alias Outputs contained in the block's transaction payload
-   * outputs, if any.
-   *
-   * Errors if any Alias Output does not contain a valid or empty DID Document.
-   */
-  static unpackFromBlock(network: string, block: Block): IotaDocument[];
   /**
    * Returns a copy of the metadata associated with this document.
    *
@@ -2390,14 +2864,6 @@ export class IotaDocument {
    * Sets the deactivated status of the DID document.
    */
   setMetadataDeactivated(deactivated?: boolean | null): void;
-  /**
-   * Returns a copy of the Bech32-encoded state controller address, if present.
-   */
-  metadataStateControllerAddress(): string | undefined;
-  /**
-   * Returns a copy of the Bech32-encoded governor address, if present.
-   */
-  metadataGovernorAddress(): string | undefined;
   /**
    * Sets a custom property in the document metadata.
    * If the value is set to `null`, the custom property will be removed.
@@ -2526,14 +2992,6 @@ export class IotaDocumentMetadata {
    */
   deactivated(): boolean | undefined;
   /**
-   * Returns a copy of the Bech32-encoded state controller address, if present.
-   */
-  stateControllerAddress(): string | undefined;
-  /**
-   * Returns a copy of the Bech32-encoded governor address, if present.
-   */
-  governorAddress(): string | undefined;
-  /**
    * Returns a copy of the custom metadata properties.
    */
   properties(): Map<string, any>;
@@ -2550,52 +3008,23 @@ export class IotaDocumentMetadata {
    */
   clone(): IotaDocumentMetadata;
 }
-/**
- * An extension interface that provides helper functions for publication
- * and resolution of DID documents in Alias Outputs.
- */
-export class IotaIdentityClientExt {
+export class IotaTransactionBlockResponseEssence {
   private constructor();
+/**
+** Return copy of self without private attributes.
+*/
+  toJSON(): Object;
+/**
+* Return stringified version of self.
+*/
+  toString(): string;
   free(): void;
-  /**
-   * Create a DID with a new Alias Output containing the given `document`.
-   *
-   * The `address` will be set as the state controller and governor unlock conditions.
-   * The minimum required token deposit amount will be set according to the given
-   * `rent_structure`, which will be fetched from the node if not provided.
-   * The returned Alias Output can be further customised before publication, if desired.
-   *
-   * NOTE: this does *not* publish the Alias Output.
-   */
-  static newDidOutput(client: IIotaIdentityClient, address: Address, document: IotaDocument, rentStructure?: IRent | null): Promise<AliasOutputBuilderParams>;
-  /**
-   * Fetches the associated Alias Output and updates it with `document` in its state metadata.
-   * The storage deposit on the output is left unchanged. If the size of the document increased,
-   * the amount should be increased manually.
-   *
-   * NOTE: this does *not* publish the updated Alias Output.
-   */
-  static updateDidOutput(client: IIotaIdentityClient, document: IotaDocument): Promise<AliasOutputBuilderParams>;
-  /**
-   * Removes the DID document from the state metadata of its Alias Output,
-   * effectively deactivating it. The storage deposit on the output is left unchanged,
-   * and should be reallocated manually.
-   *
-   * Deactivating does not destroy the output. Hence, it can be re-activated by publishing
-   * an update containing a DID document.
-   *
-   * NOTE: this does *not* publish the updated Alias Output.
-   */
-  static deactivateDidOutput(client: IIotaIdentityClient, did: IotaDID): Promise<AliasOutputBuilderParams>;
-  /**
-   * Resolve a {@link IotaDocument}. Returns an empty, deactivated document if the state metadata
-   * of the Alias Output is empty.
-   */
-  static resolveDid(client: IIotaIdentityClient, did: IotaDID): Promise<IotaDocument>;
-  /**
-   * Fetches the `IAliasOutput` associated with the given DID.
-   */
-  static resolveDidOutput(client: IIotaIdentityClient, did: IotaDID): Promise<AliasOutputBuilderParams>;
+  effectsExist: boolean;
+  effects: string;
+  get effectsExecutionStatus(): ExecutionStatus | undefined;
+  set effectsExecutionStatus(value: ExecutionStatus | null | undefined);
+  get effectsCreated(): OwnedObjectRef[] | undefined;
+  set effectsCreated(value: OwnedObjectRef[] | null | undefined);
 }
 export class IssuerMetadata {
   free(): void;
@@ -2791,6 +3220,11 @@ export class JptPresentationValidatorUtils {
    */
   static checkTimeframesWithValidityTimeframe2024(credential: Credential, validity_timeframe: Timestamp | null | undefined, status_check: StatusCheck): void;
 }
+/**
+ * JSON Web Key.
+ *
+ * [More Info](https://tools.ietf.org/html/rfc7517#section-4)
+ */
 export class Jwk {
   free(): void;
   constructor(jwk: IJwkParams);
@@ -2811,6 +3245,10 @@ export class Jwk {
    * Returns the value of the key ID property (kid).
    */
   kid(): string | undefined;
+  /**
+   * Sets a value for the key ID property (kid).
+   */
+  setKid(kid: string): void;
   /**
    * Returns the value of the X.509 URL property (x5u).
    */
@@ -2843,6 +3281,14 @@ export class Jwk {
    * If this JWK is of kty RSA, returns those parameters.
    */
   paramsRsa(): JwkParamsRsa | undefined;
+  /**
+   * Creates a Thumbprint of the JSON Web Key according to [RFC7638](https://tools.ietf.org/html/rfc7638).
+   *
+   * `SHA2-256` is used as the hash function *H*.
+   *
+   * The thumbprint is returned as a base64url-encoded string.
+   */
+  thumbprintSha256B64(): string;
   /**
    * Returns a clone of the {@link Jwk} with _all_ private key components unset.
    * Nothing is returned when `kty = oct` as this key type is not considered public by this library.
@@ -2973,6 +3419,9 @@ export class JwpPresentationOptions {
    */
   set nonce(value: string | null | undefined);
 }
+/**
+ * Holds additional options for verifying a JWP
+ */
 export class JwpVerificationOptions {
   private constructor();
 /**
@@ -3154,6 +3603,9 @@ export class JwsHeader {
    */
   clone(): JwsHeader;
 }
+/**
+ * Options for creating a JSON Web Signature.
+ */
 export class JwsSignatureOptions {
 /**
 ** Return copy of self without private attributes.
@@ -3214,6 +3666,9 @@ export class JwsSignatureOptions {
    */
   clone(): JwsSignatureOptions;
 }
+/**
+ * Holds additional options for verifying a JWS with {@link CoreDocument.verifyJws}.
+ */
 export class JwsVerificationOptions {
 /**
 ** Return copy of self without private attributes.
@@ -3633,6 +4088,10 @@ export class KeyBindingJwtClaims {
    */
   clone(): KeyBindingJwtClaims;
 }
+/**
+ * A service wrapper for a
+ * [Linked Domain Service Endpoint](https://identity.foundation/.well-known/resources/did-configuration/#linked-domain-service-endpoint).
+ */
 export class LinkedDomainService {
 /**
 ** Return copy of self without private attributes.
@@ -3674,6 +4133,9 @@ export class LinkedDomainService {
    */
   clone(): LinkedDomainService;
 }
+/**
+ * A service wrapper for a [Linked Verifiable Presentation Service Endpoint](https://identity.foundation/linked-vp/#linked-verifiable-presentation-service-endpoint).
+ */
 export class LinkedVerifiablePresentationService {
 /**
 ** Return copy of self without private attributes.
@@ -3899,6 +4361,34 @@ export class MethodType {
    */
   clone(): MethodType;
 }
+export class OnChainIdentity {
+  private constructor();
+  free(): void;
+  static getById(id: string, client: CoreClientReadOnly): Promise<OnChainIdentity>;
+  id(): string;
+  didDocument(): IotaDocument;
+  /**
+   * Returns whether the {@link IotaDocument} contained in this {@link OnChainIdentity} has been deleted.
+   * Once a DID Document is deleted, it cannot be reactivated.
+   *
+   * When calling {@link OnChainIdentity.did_document} on an Identity whose DID Document
+   * had been deleted, an *empty* and *deactivated* {@link IotaDocument} will be returned.
+   */
+  hasDeletedDid(): boolean;
+  isShared(): boolean;
+  getControllerToken(client: IdentityClient): Promise<ControllerToken | undefined>;
+  getControllerTokenForAddress(address: string, client: IdentityClient): Promise<ControllerToken | undefined>;
+  updateDidDocument(updated_doc: IotaDocument, controller_token: ControllerToken, expiration_epoch?: bigint | null): TransactionBuilder<CreateProposal<UpdateDid>>;
+  deactivateDid(controller_token: ControllerToken, expiration_epoch?: bigint | null): TransactionBuilder<CreateProposal<UpdateDid>>;
+  deleteDid(controller_token: ControllerToken, expiration_epoch?: bigint | null): TransactionBuilder<CreateProposal<UpdateDid>>;
+  updateConfig(controller_token: ControllerToken, config: ConfigChange, expiration_epoch?: bigint | null): TransactionBuilder<CreateProposal<ConfigChange>>;
+  sendAssets(controller_token: ControllerToken, transfer_map: ([string, string])[], expiration_epoch?: bigint | null): TransactionBuilder<CreateProposal<SendAction>>;
+  revokeDelegationToken(controller_cap: ControllerCap, delegation_token: DelegationToken): TransactionBuilder<DelegationTokenRevocation>;
+  unrevokeDelegationToken(controller_cap: ControllerCap, delegation_token: DelegationToken): TransactionBuilder<DelegationTokenRevocation>;
+  deleteDelegationToken(delegation_token: DelegationToken): TransactionBuilder<DeleteDelegationToken>;
+  borrowAssets(controller_token: ControllerToken, objects: string[], borrow_fn?: BorrowFn | null, expiration_epoch?: bigint | null): TransactionBuilder<CreateProposal<Borrow>>;
+  controllerExecution(controller_token: ControllerToken, controller_cap: string, exec_fn?: ControllerExecutionFn | null, expiration_epoch?: bigint | null): TransactionBuilder<CreateProposal<ControllerExecution>>;
+}
 export class PayloadEntry {
   private constructor();
   free(): void;
@@ -3937,6 +4427,9 @@ export class Payloads {
   setUndisclosed(index: number): void;
   replacePayloadAtIndex(index: number, value: any): any;
 }
+/**
+ * Represents a bundle of one or more {@link Credential}s.
+ */
 export class Presentation {
 /**
 ** Return copy of self without private attributes.
@@ -4125,6 +4618,12 @@ export class ProofUpdateCtx {
    * Number of signed messages, number of payloads in a JWP
    */
   number_of_signed_messages: number;
+}
+export class PublishDidDocument {
+  free(): void;
+  constructor(did_document: IotaDocument, controller: string);
+  buildProgrammableTransaction(client: CoreClientReadOnly): Promise<Uint8Array>;
+  apply(wasm_effects: TransactionEffects, client: CoreClientReadOnly): Promise<IotaDocument>;
 }
 /**
  * Convenience type for resolving DID documents from different DID methods.   
@@ -4785,6 +5284,22 @@ export class SelectiveDisclosurePresentation {
    */
   setPresentationHeader(header: PresentationProtectedHeader): void;
 }
+export class SendAction {
+  private constructor();
+  free(): void;
+  readonly objectRecipientMap: ([string, string])[];
+}
+export class SendProposal {
+  private constructor();
+  free(): void;
+  approve(identity: OnChainIdentity, controller_token: ControllerToken): TransactionBuilder<ApproveProposal>;
+  intoTx(identity: OnChainIdentity, controller_token: ControllerToken): TransactionBuilder;
+  readonly id: string;
+  readonly action: SendAction;
+  readonly expiration_epoch: bigint | undefined;
+  readonly votes: bigint;
+  readonly voters: Set<string>;
+}
 /**
  * A DID Document Service used to enable trusted interactions associated with a DID subject.
  */
@@ -4989,7 +5504,7 @@ export class StatusList2021Entry {
    */
   statusListCredential(): string;
   /**
-   * Downcasts {@link this} to {@link Status}
+   * Downcasts {@link StatusList2021Entry} to {@link Status}
    */
   toStatus(): Status;
   /**
@@ -5024,6 +5539,17 @@ export class Storage {
    */
   keyStorage(): JwkStorage;
 }
+export class StorageSigner {
+  free(): void;
+  constructor(storage: Storage, key_id: string, public_key: Jwk);
+  keyId(): string;
+  sign(data: Uint8Array): Promise<string>;
+  publicKey(): Promise<PublicKey>;
+  iotaPublicKeyBytes(): Promise<Uint8Array>;
+}
+/**
+ * A parsed Timestamp.
+ */
 export class Timestamp {
 /**
 ** Return copy of self without private attributes.
@@ -5070,6 +5596,12 @@ export class Timestamp {
    * Deserializes an instance from a JSON object.
    */
   static fromJSON(json: any): Timestamp;
+}
+export class TransactionOutputInternalIotaDocument {
+  private constructor();
+  free(): void;
+  readonly output: IotaDocument;
+  readonly response: WasmIotaTransactionBlockResponseWrapper;
 }
 export class TypeMetadata {
   free(): void;
@@ -5125,6 +5657,16 @@ export class UnknownCredential {
    * Deep clones the object.
    */
   clone(): UnknownCredential;
+}
+export class UpdateDid {
+  private constructor();
+  free(): void;
+  isDeactivation(): boolean;
+  readonly didDocument: IotaDocument | undefined;
+}
+export class UpdateDidProposal {
+  private constructor();
+  free(): void;
 }
 /**
  * A DID Document Verification Method.
@@ -5213,17 +5755,30 @@ export class VerificationMethod {
    */
   clone(): VerificationMethod;
 }
+export class WasmManagedCoreClient {
+  private constructor();
+  free(): void;
+  packageId(): string;
+  packageHistory(): string[];
+  network(): string;
+  iotaClient(): IotaClient;
+  signer(): TransactionSigner;
+  senderAddress(): string;
+  senderPublicKey(): PublicKey;
+}
+export class WasmManagedCoreClientReadOnly {
+  private constructor();
+  free(): void;
+  packageId(): string;
+  packageHistory(): string[];
+  network(): string;
+  iotaClient(): IotaClient;
+}
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
-  readonly __wbg_jptcredentialvalidator_free: (a: number, b: number) => void;
-  readonly jptcredentialvalidator_validate: (a: number, b: any, c: number, d: number) => [number, number, number];
-  readonly __wbg_sdobjectdecoder_free: (a: number, b: number) => void;
-  readonly sdobjectdecoder_new: () => number;
-  readonly sdobjectdecoder_decode: (a: number, b: any, c: any) => [number, number, number];
-  readonly start: () => void;
   readonly __wbg_domainlinkageconfiguration_free: (a: number, b: number) => void;
   readonly domainlinkageconfiguration_new: (a: any) => [number, number, number];
   readonly domainlinkageconfiguration_linkedDids: (a: number) => any;
@@ -5231,471 +5786,6 @@ export interface InitOutput {
   readonly domainlinkageconfiguration_toJSON: (a: number) => [number, number, number];
   readonly domainlinkageconfiguration_fromJSON: (a: any) => [number, number, number];
   readonly domainlinkageconfiguration_clone: (a: number) => number;
-  readonly __wbg_jwtdomainlinkagevalidator_free: (a: number, b: number) => void;
-  readonly jwtdomainlinkagevalidator_new: (a: number) => number;
-  readonly jwtdomainlinkagevalidator_validateLinkage: (a: number, b: any, c: number, d: number, e: number, f: number) => [number, number];
-  readonly jwtdomainlinkagevalidator_validateCredential: (a: number, b: any, c: number, d: number, e: number, f: number) => [number, number];
-  readonly __wbg_jwt_free: (a: number, b: number) => void;
-  readonly jwt_constructor: (a: number, b: number) => number;
-  readonly jwt_toString: (a: number) => [number, number];
-  readonly jwt_toJSON: (a: number) => [number, number, number];
-  readonly jwt_fromJSON: (a: any) => [number, number, number];
-  readonly jwt_clone: (a: number) => number;
-  readonly __wbg_issuerprotectedheader_free: (a: number, b: number) => void;
-  readonly __wbg_get_issuerprotectedheader_typ: (a: number) => [number, number];
-  readonly __wbg_set_issuerprotectedheader_typ: (a: number, b: number, c: number) => void;
-  readonly __wbg_get_issuerprotectedheader_alg: (a: number) => number;
-  readonly __wbg_set_issuerprotectedheader_alg: (a: number, b: number) => void;
-  readonly __wbg_get_issuerprotectedheader_kid: (a: number) => [number, number];
-  readonly __wbg_set_issuerprotectedheader_kid: (a: number, b: number, c: number) => void;
-  readonly __wbg_get_issuerprotectedheader_cid: (a: number) => [number, number];
-  readonly __wbg_set_issuerprotectedheader_cid: (a: number, b: number, c: number) => void;
-  readonly issuerprotectedheader_claims: (a: number) => [number, number];
-  readonly __wbg_typemetadata_free: (a: number, b: number) => void;
-  readonly typemetadata_toJSON: (a: number) => [number, number, number];
-  readonly typemetadata_fromJSON: (a: any) => [number, number, number];
-  readonly typemetadata_new: (a: any) => [number, number, number];
-  readonly typemetadata_intoInner: (a: number) => [number, number, number];
-  readonly typemetadata_validateCredential: (a: number, b: any) => [number, number];
-  readonly typemetadata_validateCredentialWithResolver: (a: number, b: any, c: any) => any;
-  readonly __wbg_sdjwtv2_free: (a: number, b: number) => void;
-  readonly sdjwtv2_parse: (a: number, b: number) => [number, number, number];
-  readonly sdjwtv2_header: (a: number) => any;
-  readonly sdjwtv2_claims: (a: number) => [number, number, number];
-  readonly sdjwtv2_disclosures: (a: number) => [number, number];
-  readonly sdjwtv2_requiredKeyBind: (a: number) => any;
-  readonly sdjwtv2_intoDisclosedObject: (a: number) => [number, number, number];
-  readonly sdjwtv2_presentation: (a: number) => [number, number];
-  readonly sdjwtv2_toJSON: (a: number) => any;
-  readonly __wbg_sdjwtpresentationbuilder_free: (a: number, b: number) => void;
-  readonly sdjwtpresentationbuilder_new: (a: number, b: any) => [number, number, number];
-  readonly sdjwtpresentationbuilder_conceal: (a: number, b: number, c: number) => [number, number, number];
-  readonly sdjwtpresentationbuilder_attachKeyBindingJwt: (a: number, b: number) => number;
-  readonly sdjwtpresentationbuilder_finish: (a: number) => [number, number, number];
-  readonly __wbg_sdjwtpresentationresult_free: (a: number, b: number) => void;
-  readonly __wbg_get_sdjwtpresentationresult_sdJwt: (a: number) => number;
-  readonly __wbg_set_sdjwtpresentationresult_sdJwt: (a: number, b: number) => void;
-  readonly __wbg_get_sdjwtpresentationresult_disclosures: (a: number) => [number, number];
-  readonly __wbg_set_sdjwtpresentationresult_disclosures: (a: number, b: number, c: number) => void;
-  readonly sdjwtv2_toString: (a: number) => any;
-  readonly __wbg_jwpcredentialoptions_free: (a: number, b: number) => void;
-  readonly __wbg_get_jwpcredentialoptions_kid: (a: number) => [number, number];
-  readonly __wbg_set_jwpcredentialoptions_kid: (a: number, b: number, c: number) => void;
-  readonly jwpcredentialoptions_new: () => number;
-  readonly jwpcredentialoptions_fromJSON: (a: any) => [number, number, number];
-  readonly jwpcredentialoptions_toJSON: (a: number) => [number, number, number];
-  readonly __wbg_statuslist2021_free: (a: number, b: number) => void;
-  readonly statuslist2021_clone: (a: number) => number;
-  readonly statuslist2021_new: (a: number) => [number, number, number];
-  readonly statuslist2021_len: (a: number) => number;
-  readonly statuslist2021_get: (a: number, b: number) => [number, number, number];
-  readonly statuslist2021_set: (a: number, b: number, c: number) => [number, number];
-  readonly statuslist2021_intoEncodedStr: (a: number) => [number, number];
-  readonly statuslist2021_fromEncodedStr: (a: number, b: number) => [number, number, number];
-  readonly __wbg_revocationtimeframestatus_free: (a: number, b: number) => void;
-  readonly revocationtimeframestatus_clone: (a: number) => number;
-  readonly revocationtimeframestatus_toJSON: (a: number) => [number, number, number];
-  readonly revocationtimeframestatus_fromJSON: (a: any) => [number, number, number];
-  readonly revocationtimeframestatus_new: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
-  readonly revocationtimeframestatus_startValidityTimeframe: (a: number) => number;
-  readonly revocationtimeframestatus_endValidityTimeframe: (a: number) => number;
-  readonly revocationtimeframestatus_id: (a: number) => [number, number];
-  readonly revocationtimeframestatus_index: (a: number) => number;
-  readonly __wbg_sdjwtvcbuilder_free: (a: number, b: number) => void;
-  readonly sdjwtvcbuilder_new: (a: any, b: any) => [number, number, number];
-  readonly sdjwtvcbuilder_fromCredential: (a: number, b: any) => [number, number, number];
-  readonly sdjwtvcbuilder_makeConcealable: (a: number, b: number, c: number) => [number, number, number];
-  readonly sdjwtvcbuilder_header: (a: number, b: any) => number;
-  readonly sdjwtvcbuilder_addDecoys: (a: number, b: number, c: number, d: number) => [number, number, number];
-  readonly sdjwtvcbuilder_requireKeyBinding: (a: number, b: any) => [number, number, number];
-  readonly sdjwtvcbuilder_iss: (a: number, b: number, c: number) => [number, number, number];
-  readonly sdjwtvcbuilder_nbf: (a: number, b: number) => number;
-  readonly sdjwtvcbuilder_exp: (a: number, b: number) => number;
-  readonly sdjwtvcbuilder_iat: (a: number, b: number) => number;
-  readonly sdjwtvcbuilder_vct: (a: number, b: number, c: number) => number;
-  readonly sdjwtvcbuilder_sub: (a: number, b: number, c: number) => number;
-  readonly sdjwtvcbuilder_status: (a: number, b: any) => [number, number, number];
-  readonly sdjwtvcbuilder_finish: (a: number, b: any, c: number, d: number) => any;
-  readonly __wbg_claimmetadata_free: (a: number, b: number) => void;
-  readonly __wbg_get_claimmetadata_path: (a: number) => any;
-  readonly __wbg_set_claimmetadata_path: (a: number, b: any) => void;
-  readonly __wbg_get_claimmetadata_display: (a: number) => [number, number];
-  readonly __wbg_set_claimmetadata_display: (a: number, b: number, c: number) => void;
-  readonly __wbg_get_claimmetadata_sd: (a: number) => any;
-  readonly __wbg_set_claimmetadata_sd: (a: number, b: number) => void;
-  readonly __wbg_get_claimmetadata_svg_id: (a: number) => [number, number];
-  readonly __wbg_set_claimmetadata_svg_id: (a: number, b: number, c: number) => void;
-  readonly __wbg_claimdisplay_free: (a: number, b: number) => void;
-  readonly __wbg_get_claimdisplay_lang: (a: number) => [number, number];
-  readonly __wbg_set_claimdisplay_lang: (a: number, b: number, c: number) => void;
-  readonly __wbg_get_claimdisplay_label: (a: number) => [number, number];
-  readonly __wbg_set_claimdisplay_label: (a: number, b: number, c: number) => void;
-  readonly __wbg_get_claimdisplay_description: (a: number) => [number, number];
-  readonly __wbg_set_claimdisplay_description: (a: number, b: number, c: number) => void;
-  readonly __wbg_sdjwtbuilder_free: (a: number, b: number) => void;
-  readonly sdjwtbuilder_new: (a: any, b: any, c: number) => [number, number, number];
-  readonly sdjwtbuilder_makeConcealable: (a: number, b: number, c: number) => [number, number, number];
-  readonly sdjwtbuilder_header: (a: number, b: any) => number;
-  readonly sdjwtbuilder_insertClaim: (a: number, b: number, c: number, d: any) => [number, number, number];
-  readonly sdjwtbuilder_addDecoys: (a: number, b: number, c: number, d: number) => [number, number, number];
-  readonly sdjwtbuilder_requireKeyBinding: (a: number, b: any) => [number, number, number];
-  readonly sdjwtbuilder_finish: (a: number, b: any, c: number, d: number) => any;
-  readonly __wbg_disclosurev2_free: (a: number, b: number) => void;
-  readonly __wbg_get_disclosurev2_claimValue: (a: number) => any;
-  readonly __wbg_set_disclosurev2_claimValue: (a: number, b: any) => void;
-  readonly disclosurev2_parse: (a: number, b: number) => [number, number, number];
-  readonly disclosurev2_toString: (a: number) => [number, number];
-  readonly __wbg_methodscope_free: (a: number, b: number) => void;
-  readonly methodscope_VerificationMethod: () => number;
-  readonly methodscope_Authentication: () => number;
-  readonly methodscope_AssertionMethod: () => number;
-  readonly methodscope_KeyAgreement: () => number;
-  readonly methodscope_CapabilityDelegation: () => number;
-  readonly methodscope_CapabilityInvocation: () => number;
-  readonly methodscope_toString: (a: number) => [number, number];
-  readonly methodscope_toJSON: (a: number) => [number, number, number];
-  readonly methodscope_fromJSON: (a: any) => [number, number, number];
-  readonly methodscope_clone: (a: number) => number;
-  readonly __wbg_get_disclosurev2_claimName: (a: number) => [number, number];
-  readonly __wbg_set_disclosurev2_claimName: (a: number, b: number, c: number) => void;
-  readonly __wbg_set_disclosurev2_salt: (a: number, b: number, c: number) => void;
-  readonly __wbg_get_disclosurev2_salt: (a: number) => [number, number];
-  readonly __wbg_payloadentry_free: (a: number, b: number) => void;
-  readonly __wbg_get_payloadentry_1: (a: number) => number;
-  readonly __wbg_set_payloadentry_1: (a: number, b: number) => void;
-  readonly payloadentry_set_value: (a: number, b: any) => void;
-  readonly payloadentry_value: (a: number) => any;
-  readonly __wbg_payloads_free: (a: number, b: number) => void;
-  readonly payloads_toJSON: (a: number) => [number, number, number];
-  readonly payloads_fromJSON: (a: any) => [number, number, number];
-  readonly payloads_clone: (a: number) => number;
-  readonly payloads_new: (a: number, b: number) => [number, number, number];
-  readonly payloads_newFromValues: (a: number, b: number) => [number, number, number];
-  readonly payloads_getValues: (a: number) => [number, number, number, number];
-  readonly payloads_getUndisclosedIndexes: (a: number) => [number, number];
-  readonly payloads_getDisclosedIndexes: (a: number) => [number, number];
-  readonly payloads_getUndisclosedPayloads: (a: number) => [number, number, number, number];
-  readonly payloads_getDisclosedPayloads: (a: number) => number;
-  readonly payloads_setUndisclosed: (a: number, b: number) => void;
-  readonly payloads_replacePayloadAtIndex: (a: number, b: number, c: any) => [number, number, number];
-  readonly __wbg_disclosure_free: (a: number, b: number) => void;
-  readonly disclosure_new: (a: number, b: number, c: number, d: number, e: any) => [number, number, number];
-  readonly disclosure_parse: (a: number, b: number) => [number, number, number];
-  readonly disclosure_disclosure: (a: number) => [number, number];
-  readonly disclosure_salt: (a: number) => [number, number];
-  readonly disclosure_claimName: (a: number) => [number, number];
-  readonly disclosure_claimValue: (a: number) => [number, number, number];
-  readonly disclosure_toJSON: (a: number) => [number, number, number];
-  readonly disclosure_fromJSON: (a: any) => [number, number, number];
-  readonly __wbg_jwkgenoutput_free: (a: number, b: number) => void;
-  readonly jwkgenoutput_new: (a: number, b: number, c: number) => number;
-  readonly jwkgenoutput_jwk: (a: number) => number;
-  readonly jwkgenoutput_keyId: (a: number) => [number, number];
-  readonly jwkgenoutput_toJSON: (a: number) => [number, number, number];
-  readonly jwkgenoutput_fromJSON: (a: any) => [number, number, number];
-  readonly jwkgenoutput_clone: (a: number) => number;
-  readonly __wbg_methoddata_free: (a: number, b: number) => void;
-  readonly methoddata_newBase58: (a: number, b: number) => number;
-  readonly methoddata_newMultibase: (a: number, b: number) => number;
-  readonly methoddata_newJwk: (a: number) => [number, number, number];
-  readonly methoddata_newCustom: (a: number, b: number, c: any) => [number, number, number];
-  readonly methoddata_tryCustom: (a: number) => [number, number, number];
-  readonly methoddata_tryDecode: (a: number) => [number, number, number, number];
-  readonly methoddata_tryPublicKeyJwk: (a: number) => [number, number, number];
-  readonly methoddata_toJSON: (a: number) => [number, number, number];
-  readonly methoddata_fromJSON: (a: any) => [number, number, number];
-  readonly methoddata_clone: (a: number) => number;
-  readonly __wbg_custommethoddata_free: (a: number, b: number) => void;
-  readonly custommethoddata_new: (a: number, b: number, c: any) => [number, number, number];
-  readonly custommethoddata_clone: (a: number) => number;
-  readonly custommethoddata_toJSON: (a: number) => [number, number, number];
-  readonly custommethoddata_fromJSON: (a: any) => [number, number, number];
-  readonly disclosure_toEncodedString: (a: number) => [number, number];
-  readonly disclosure_toString: (a: number) => [number, number];
-  readonly __wbg_jws_free: (a: number, b: number) => void;
-  readonly jws_constructor: (a: number, b: number) => number;
-  readonly jws_toString: (a: number) => [number, number];
-  readonly __wbg_decodedjwtcredential_free: (a: number, b: number) => void;
-  readonly decodedjwtcredential_credential: (a: number) => number;
-  readonly decodedjwtcredential_protectedHeader: (a: number) => number;
-  readonly decodedjwtcredential_customClaims: (a: number) => any;
-  readonly decodedjwtcredential_intoCredential: (a: number) => number;
-  readonly __wbg_unknowncredential_free: (a: number, b: number) => void;
-  readonly unknowncredential_tryIntoJwt: (a: number) => number;
-  readonly unknowncredential_tryIntoCredential: (a: number) => number;
-  readonly unknowncredential_tryIntoRaw: (a: number) => any;
-  readonly unknowncredential_toJSON: (a: number) => [number, number, number];
-  readonly unknowncredential_fromJSON: (a: any) => [number, number, number];
-  readonly unknowncredential_clone: (a: number) => number;
-  readonly __wbg_decodedjwtpresentation_free: (a: number, b: number) => void;
-  readonly decodedjwtpresentation_presentation: (a: number) => number;
-  readonly decodedjwtpresentation_protectedHeader: (a: number) => number;
-  readonly decodedjwtpresentation_intoPresentation: (a: number) => number;
-  readonly decodedjwtpresentation_expirationDate: (a: number) => number;
-  readonly decodedjwtpresentation_issuanceDate: (a: number) => number;
-  readonly decodedjwtpresentation_audience: (a: number) => [number, number];
-  readonly decodedjwtpresentation_customClaims: (a: number) => any;
-  readonly __wbg_jwsverificationoptions_free: (a: number, b: number) => void;
-  readonly jwsverificationoptions_new: (a: number) => [number, number, number];
-  readonly jwsverificationoptions_setNonce: (a: number, b: number, c: number) => void;
-  readonly jwsverificationoptions_setMethodScope: (a: number, b: number) => void;
-  readonly jwsverificationoptions_setMethodId: (a: number, b: number) => void;
-  readonly jwsverificationoptions_toJSON: (a: number) => [number, number, number];
-  readonly jwsverificationoptions_fromJSON: (a: any) => [number, number, number];
-  readonly jwsverificationoptions_clone: (a: number) => number;
-  readonly __wbg_iotaidentityclientext_free: (a: number, b: number) => void;
-  readonly iotaidentityclientext_newDidOutput: (a: any, b: any, c: number, d: number) => [number, number, number];
-  readonly iotaidentityclientext_updateDidOutput: (a: any, b: number) => [number, number, number];
-  readonly iotaidentityclientext_deactivateDidOutput: (a: any, b: number) => [number, number, number];
-  readonly iotaidentityclientext_resolveDid: (a: any, b: number) => [number, number, number];
-  readonly iotaidentityclientext_resolveDidOutput: (a: any, b: number) => [number, number, number];
-  readonly __wbg_iotadid_free: (a: number, b: number) => void;
-  readonly iotadid_static_default_network: () => [number, number];
-  readonly iotadid_new: (a: number, b: number, c: number, d: number) => [number, number, number];
-  readonly iotadid_fromAliasId: (a: number, b: number, c: number, d: number) => [number, number, number];
-  readonly iotadid_placeholder: (a: number, b: number) => [number, number, number];
-  readonly iotadid_parse: (a: number, b: number) => [number, number, number];
-  readonly iotadid_network: (a: number) => [number, number];
-  readonly iotadid_tag: (a: number) => [number, number];
-  readonly iotadid_toCoreDid: (a: number) => number;
-  readonly iotadid_scheme: (a: number) => [number, number];
-  readonly iotadid_authority: (a: number) => [number, number];
-  readonly iotadid_method: (a: number) => [number, number];
-  readonly iotadid_methodId: (a: number) => [number, number];
-  readonly iotadid_join: (a: number, b: number, c: number) => [number, number, number];
-  readonly iotadid_toUrl: (a: number) => number;
-  readonly iotadid_toAliasId: (a: number) => [number, number];
-  readonly iotadid_intoUrl: (a: number) => number;
-  readonly iotadid_toString: (a: number) => [number, number];
-  readonly iotadid_toJSON: (a: number) => [number, number, number];
-  readonly iotadid_fromJSON: (a: any) => [number, number, number];
-  readonly iotadid_clone: (a: number) => number;
-  readonly __wbg_iotadocument_free: (a: number, b: number) => void;
-  readonly iotadocument_new: (a: number, b: number) => [number, number, number];
-  readonly iotadocument_newWithId: (a: number) => number;
-  readonly iotadocument_id: (a: number) => [number, number, number];
-  readonly iotadocument_controller: (a: number) => [number, number, number];
-  readonly iotadocument_setController: (a: number, b: any) => [number, number];
-  readonly iotadocument_alsoKnownAs: (a: number) => [number, number, number];
-  readonly iotadocument_setAlsoKnownAs: (a: number, b: any) => [number, number];
-  readonly iotadocument_properties: (a: number) => [number, number, number];
-  readonly iotadocument_setPropertyUnchecked: (a: number, b: number, c: number, d: any) => [number, number];
-  readonly iotadocument_service: (a: number) => [number, number, number];
-  readonly iotadocument_insertService: (a: number, b: number) => [number, number];
-  readonly iotadocument_removeService: (a: number, b: number) => [number, number, number];
-  readonly iotadocument_resolveService: (a: number, b: any) => [number, number, number];
-  readonly iotadocument_methods: (a: number, b: number) => [number, number, number];
-  readonly iotadocument_insertMethod: (a: number, b: number, c: number) => [number, number];
-  readonly iotadocument_removeMethod: (a: number, b: number) => [number, number, number];
-  readonly iotadocument_resolveMethod: (a: number, b: any, c: number) => [number, number, number];
-  readonly iotadocument_attachMethodRelationship: (a: number, b: number, c: number) => [number, number, number];
-  readonly iotadocument_detachMethodRelationship: (a: number, b: number, c: number) => [number, number, number];
-  readonly iotadocument_verifyJws: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
-  readonly iotadocument_pack: (a: number) => [number, number, number, number];
-  readonly iotadocument_packWithEncoding: (a: number, b: number) => [number, number, number, number];
-  readonly iotadocument_unpackFromOutput: (a: number, b: any, c: number) => [number, number, number];
-  readonly iotadocument_unpackFromBlock: (a: number, b: number, c: any) => [number, number, number];
-  readonly iotadocument_metadata: (a: number) => [number, number, number];
-  readonly iotadocument_metadataCreated: (a: number) => [number, number, number];
-  readonly iotadocument_setMetadataCreated: (a: number, b: any) => [number, number];
-  readonly iotadocument_metadataUpdated: (a: number) => [number, number, number];
-  readonly iotadocument_setMetadataUpdated: (a: number, b: any) => [number, number];
-  readonly iotadocument_metadataDeactivated: (a: number) => [number, number, number];
-  readonly iotadocument_setMetadataDeactivated: (a: number, b: number) => [number, number];
-  readonly iotadocument_metadataStateControllerAddress: (a: number) => [number, number, number, number];
-  readonly iotadocument_metadataGovernorAddress: (a: number) => [number, number, number, number];
-  readonly iotadocument_setMetadataPropertyUnchecked: (a: number, b: number, c: number, d: any) => [number, number];
-  readonly iotadocument_revokeCredentials: (a: number, b: any, c: any) => [number, number];
-  readonly iotadocument_unrevokeCredentials: (a: number, b: any, c: any) => [number, number];
-  readonly iotadocument_clone: (a: number) => [number, number, number];
-  readonly iotadocument__shallowCloneInternal: (a: number) => number;
-  readonly iotadocument__strongCountInternal: (a: number) => number;
-  readonly iotadocument_toJSON: (a: number) => [number, number, number];
-  readonly iotadocument_fromJSON: (a: any) => [number, number, number];
-  readonly iotadocument_toCoreDocument: (a: number) => [number, number, number];
-  readonly iotadocument_generateMethod: (a: number, b: number, c: number, d: number, e: any, f: number, g: number, h: number) => [number, number, number];
-  readonly iotadocument_purgeMethod: (a: number, b: number, c: number) => [number, number, number];
-  readonly iotadocument_createJwt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
-  readonly iotadocument_createJws: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
-  readonly iotadocument_createCredentialJwt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
-  readonly iotadocument_createPresentationJwt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
-  readonly iotadocument_generateMethodJwp: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
-  readonly iotadocument_createIssuedJwp: (a: number, b: number, c: number, d: number, e: any, f: number) => [number, number, number];
-  readonly iotadocument_createPresentedJwp: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
-  readonly iotadocument_createCredentialJpt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
-  readonly iotadocument_createPresentationJpt: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
-  readonly __wbg_iotadocumentmetadata_free: (a: number, b: number) => void;
-  readonly iotadocumentmetadata_created: (a: number) => number;
-  readonly iotadocumentmetadata_updated: (a: number) => number;
-  readonly iotadocumentmetadata_deactivated: (a: number) => number;
-  readonly iotadocumentmetadata_stateControllerAddress: (a: number) => [number, number];
-  readonly iotadocumentmetadata_governorAddress: (a: number) => [number, number];
-  readonly iotadocumentmetadata_properties: (a: number) => [number, number, number];
-  readonly iotadocumentmetadata_toJSON: (a: number) => [number, number, number];
-  readonly iotadocumentmetadata_fromJSON: (a: any) => [number, number, number];
-  readonly iotadocumentmetadata_clone: (a: number) => number;
-  readonly __wbg_decodedjws_free: (a: number, b: number) => void;
-  readonly decodedjws_claims: (a: number) => [number, number, number, number];
-  readonly decodedjws_claimsBytes: (a: number) => [number, number];
-  readonly decodedjws_protectedHeader: (a: number) => number;
-  readonly decodedjws_clone: (a: number) => number;
-  readonly decodedjws_toJSON: (a: number) => [number, number, number];
-  readonly __wbg_jwk_free: (a: number, b: number) => void;
-  readonly jwk_new: (a: any) => number;
-  readonly jwk_kty: (a: number) => any;
-  readonly jwk_use: (a: number) => any;
-  readonly jwk_keyOps: (a: number) => any;
-  readonly jwk_alg: (a: number) => any;
-  readonly jwk_kid: (a: number) => [number, number];
-  readonly jwk_x5u: (a: number) => [number, number];
-  readonly jwk_x5c: (a: number) => any;
-  readonly jwk_x5t: (a: number) => [number, number];
-  readonly jwk_x5t256: (a: number) => [number, number];
-  readonly jwk_paramsEc: (a: number) => [number, number, number];
-  readonly jwk_paramsOkp: (a: number) => [number, number, number];
-  readonly jwk_paramsOct: (a: number) => [number, number, number];
-  readonly jwk_paramsRsa: (a: number) => [number, number, number];
-  readonly jwk_toPublic: (a: number) => number;
-  readonly jwk_isPublic: (a: number) => number;
-  readonly jwk_isPrivate: (a: number) => number;
-  readonly jwk_toJSON: (a: number) => [number, number, number];
-  readonly jwk_fromJSON: (a: any) => [number, number, number];
-  readonly jwk_clone: (a: number) => number;
-  readonly __wbg_jwsheader_free: (a: number, b: number) => void;
-  readonly jwsheader_new: () => number;
-  readonly jwsheader_alg: (a: number) => any;
-  readonly jwsheader_setAlg: (a: number, b: any) => [number, number];
-  readonly jwsheader_b64: (a: number) => number;
-  readonly jwsheader_setB64: (a: number, b: number) => void;
-  readonly jwsheader_custom: (a: number) => any;
-  readonly jwsheader_has: (a: number, b: number, c: number) => number;
-  readonly jwsheader_isDisjoint: (a: number, b: number) => number;
-  readonly jwsheader_jku: (a: number) => [number, number];
-  readonly jwsheader_setJku: (a: number, b: number, c: number) => [number, number];
-  readonly jwsheader_jwk: (a: number) => number;
-  readonly jwsheader_setJwk: (a: number, b: number) => void;
-  readonly jwsheader_kid: (a: number) => [number, number];
-  readonly jwsheader_setKid: (a: number, b: number, c: number) => void;
-  readonly jwsheader_x5u: (a: number) => [number, number];
-  readonly jwsheader_setX5u: (a: number, b: number, c: number) => [number, number];
-  readonly jwsheader_setX5c: (a: number, b: any) => [number, number];
-  readonly jwsheader_x5t: (a: number) => [number, number];
-  readonly jwsheader_setX5t: (a: number, b: number, c: number) => void;
-  readonly jwsheader_x5tS256: (a: number) => [number, number];
-  readonly jwsheader_setX5tS256: (a: number, b: number, c: number) => void;
-  readonly jwsheader_typ: (a: number) => [number, number];
-  readonly jwsheader_setTyp: (a: number, b: number, c: number) => void;
-  readonly jwsheader_cty: (a: number) => [number, number];
-  readonly jwsheader_setCty: (a: number, b: number, c: number) => void;
-  readonly jwsheader_crit: (a: number) => any;
-  readonly jwsheader_setCrit: (a: number, b: any) => [number, number];
-  readonly jwsheader_url: (a: number) => [number, number];
-  readonly jwsheader_setUrl: (a: number, b: number, c: number) => [number, number];
-  readonly jwsheader_nonce: (a: number) => [number, number];
-  readonly jwsheader_setNonce: (a: number, b: number, c: number) => void;
-  readonly jwsheader_toJSON: (a: number) => [number, number, number];
-  readonly jwsheader_fromJSON: (a: any) => [number, number, number];
-  readonly jwsheader_clone: (a: number) => number;
-  readonly __wbg_revocationbitmap_free: (a: number, b: number) => void;
-  readonly revocationbitmap_new: () => number;
-  readonly revocationbitmap_type: () => [number, number];
-  readonly revocationbitmap_isRevoked: (a: number, b: number) => number;
-  readonly revocationbitmap_revoke: (a: number, b: number) => number;
-  readonly revocationbitmap_unrevoke: (a: number, b: number) => number;
-  readonly revocationbitmap_len: (a: number) => [number, number, number];
-  readonly revocationbitmap_toService: (a: number, b: number) => [number, number, number];
-  readonly revocationbitmap_fromEndpoint: (a: number) => [number, number, number];
-  readonly __wbg_jwtpresentationoptions_free: (a: number, b: number) => void;
-  readonly jwtpresentationoptions_new: (a: number) => [number, number, number];
-  readonly jwtpresentationoptions_toJSON: (a: number) => [number, number, number];
-  readonly jwtpresentationoptions_fromJSON: (a: any) => [number, number, number];
-  readonly jwtpresentationoptions_clone: (a: number) => number;
-  readonly __wbg_methoddigest_free: (a: number, b: number) => void;
-  readonly methoddigest_new: (a: number) => [number, number, number];
-  readonly methoddigest_pack: (a: number) => any;
-  readonly methoddigest_unpack: (a: any) => [number, number, number];
-  readonly methoddigest_clone: (a: number) => number;
-  readonly __wbg_jwssignatureoptions_free: (a: number, b: number) => void;
-  readonly jwssignatureoptions_new: (a: number) => [number, number, number];
-  readonly jwssignatureoptions_setAttachJwk: (a: number, b: number) => void;
-  readonly jwssignatureoptions_setB64: (a: number, b: number) => void;
-  readonly jwssignatureoptions_setTyp: (a: number, b: number, c: number) => void;
-  readonly jwssignatureoptions_setCty: (a: number, b: number, c: number) => void;
-  readonly jwssignatureoptions_serUrl: (a: number, b: number, c: number) => [number, number];
-  readonly jwssignatureoptions_setNonce: (a: number, b: number, c: number) => void;
-  readonly jwssignatureoptions_setKid: (a: number, b: number, c: number) => void;
-  readonly jwssignatureoptions_setDetachedPayload: (a: number, b: number) => void;
-  readonly jwssignatureoptions_setCustomHeaderParameters: (a: number, b: any) => [number, number];
-  readonly jwssignatureoptions_toJSON: (a: number) => [number, number, number];
-  readonly jwssignatureoptions_fromJSON: (a: any) => [number, number, number];
-  readonly jwssignatureoptions_clone: (a: number) => number;
-  readonly __wbg_storage_free: (a: number, b: number) => void;
-  readonly storage_new: (a: any, b: any) => number;
-  readonly storage_keyIdStorage: (a: number) => any;
-  readonly storage_keyStorage: (a: number) => any;
-  readonly verifyEd25519: (a: any, b: number, c: number, d: number, e: number, f: number) => [number, number];
-  readonly __wbg_eddsajwsverifier_free: (a: number, b: number) => void;
-  readonly eddsajwsverifier_new: () => number;
-  readonly eddsajwsverifier_verify: (a: number, b: any, c: number, d: number, e: number, f: number, g: number) => [number, number];
-  readonly __wbg_ecdsajwsverifier_free: (a: number, b: number) => void;
-  readonly ecdsajwsverifier_new: () => number;
-  readonly ecdsajwsverifier_verify: (a: number, b: any, c: number, d: number, e: number, f: number, g: number) => [number, number];
-  readonly iotadid_static_method: () => [number, number];
-  readonly jwsheader_x5c: (a: number) => any;
-  readonly __wbg_timestamp_free: (a: number, b: number) => void;
-  readonly timestamp_new: () => number;
-  readonly timestamp_parse: (a: number, b: number) => [number, number, number];
-  readonly timestamp_toRFC3339: (a: number) => [number, number];
-  readonly timestamp_checkedAdd: (a: number, b: number) => number;
-  readonly timestamp_checkedSub: (a: number, b: number) => number;
-  readonly timestamp_toJSON: (a: number) => [number, number, number];
-  readonly timestamp_fromJSON: (a: any) => [number, number, number];
-  readonly __wbg_duration_free: (a: number, b: number) => void;
-  readonly duration_seconds: (a: number) => number;
-  readonly duration_minutes: (a: number) => number;
-  readonly duration_hours: (a: number) => number;
-  readonly duration_days: (a: number) => number;
-  readonly duration_weeks: (a: number) => number;
-  readonly duration_toJSON: (a: number) => [number, number, number];
-  readonly duration_fromJSON: (a: any) => [number, number, number];
-  readonly __wbg_proof_free: (a: number, b: number) => void;
-  readonly proof_constructor: (a: number, b: number, c: any) => [number, number, number];
-  readonly proof_type: (a: number) => [number, number];
-  readonly proof_properties: (a: number) => [number, number, number];
-  readonly proof_toJSON: (a: number) => [number, number, number];
-  readonly proof_fromJSON: (a: any) => [number, number, number];
-  readonly proof_clone: (a: number) => number;
-  readonly __wbg_service_free: (a: number, b: number) => void;
-  readonly service_new: (a: any) => [number, number, number];
-  readonly service_id: (a: number) => number;
-  readonly service_type: (a: number) => any;
-  readonly service_serviceEndpoint: (a: number) => any;
-  readonly service_properties: (a: number) => [number, number, number];
-  readonly service_toJSON: (a: number) => [number, number, number];
-  readonly service_fromJSON: (a: any) => [number, number, number];
-  readonly service_clone: (a: number) => number;
-  readonly __wbg_sdobjectencoder_free: (a: number, b: number) => void;
-  readonly sdobjectencoder_new: (a: any) => [number, number, number];
-  readonly sdobjectencoder_conceal: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
-  readonly sdobjectencoder_addSdAlgProperty: (a: number) => void;
-  readonly sdobjectencoder_encodeToString: (a: number) => [number, number, number, number];
-  readonly sdobjectencoder_encodeToObject: (a: number) => [number, number, number];
-  readonly sdobjectencoder_toJSON: (a: number) => [number, number, number];
-  readonly sdobjectencoder_addDecoys: (a: number, b: number, c: number, d: number) => [number, number];
-  readonly __wbg_keybindingjwtclaims_free: (a: number, b: number) => void;
-  readonly keybindingjwtclaims_new: (a: number, b: number, c: any, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number, number];
-  readonly keybindingjwtclaims_toString: (a: number) => [number, number, number, number];
-  readonly keybindingjwtclaims_iat: (a: number) => bigint;
-  readonly keybindingjwtclaims_aud: (a: number) => [number, number];
-  readonly keybindingjwtclaims_nonce: (a: number) => [number, number];
-  readonly keybindingjwtclaims_sdHash: (a: number) => [number, number];
-  readonly keybindingjwtclaims_customProperties: (a: number) => [number, number, number];
-  readonly keybindingjwtclaims_keyBindingJwtHeaderTyp: () => [number, number];
-  readonly keybindingjwtclaims_toJSON: (a: number) => [number, number, number];
-  readonly keybindingjwtclaims_fromJSON: (a: any) => [number, number, number];
-  readonly keybindingjwtclaims_clone: (a: number) => number;
-  readonly timestamp_nowUTC: () => number;
-  readonly sdobjectencoder_toString: (a: number) => [number, number, number, number];
   readonly __wbg_credential_free: (a: number, b: number) => void;
   readonly credential_BaseContext: () => [number, number, number, number];
   readonly credential_BaseType: () => [number, number];
@@ -5721,11 +5811,17 @@ export interface InitOutput {
   readonly credential_toJSON: (a: number) => [number, number, number];
   readonly credential_fromJSON: (a: any) => [number, number, number];
   readonly credential_clone: (a: number) => number;
+  readonly __wbg_jwtdomainlinkagevalidator_free: (a: number, b: number) => void;
+  readonly jwtdomainlinkagevalidator_new: (a: number) => number;
+  readonly jwtdomainlinkagevalidator_validateLinkage: (a: number, b: any, c: number, d: number, e: number, f: number) => [number, number];
+  readonly jwtdomainlinkagevalidator_validateCredential: (a: number, b: any, c: number, d: number, e: number, f: number) => [number, number];
   readonly __wbg_decodedjptcredential_free: (a: number, b: number) => void;
   readonly decodedjptcredential_clone: (a: number) => number;
   readonly decodedjptcredential_credential: (a: number) => number;
   readonly decodedjptcredential_customClaims: (a: number) => [number, number, number];
   readonly decodedjptcredential_decodedJwp: (a: number) => number;
+  readonly __wbg_jptcredentialvalidator_free: (a: number, b: number) => void;
+  readonly jptcredentialvalidator_validate: (a: number, b: any, c: number, d: number) => [number, number, number];
   readonly __wbg_jptcredentialvalidatorutils_free: (a: number, b: number) => void;
   readonly jptcredentialvalidatorutils_new: () => number;
   readonly jptcredentialvalidatorutils_extractIssuer: (a: number) => [number, number, number];
@@ -5743,6 +5839,11 @@ export interface InitOutput {
   readonly __wbg_jptpresentationvalidatorutils_free: (a: number, b: number) => void;
   readonly jptpresentationvalidatorutils_extractIssuerFromPresentedJpt: (a: number) => [number, number, number];
   readonly jptpresentationvalidatorutils_checkTimeframesWithValidityTimeframe2024: (a: number, b: number, c: number) => [number, number];
+  readonly __wbg_decodedjwtcredential_free: (a: number, b: number) => void;
+  readonly decodedjwtcredential_credential: (a: number) => number;
+  readonly decodedjwtcredential_protectedHeader: (a: number) => number;
+  readonly decodedjwtcredential_customClaims: (a: number) => any;
+  readonly decodedjwtcredential_intoCredential: (a: number) => number;
   readonly __wbg_jwtcredentialvalidator_free: (a: number, b: number) => void;
   readonly jwtcredentialvalidator_new: (a: number) => number;
   readonly jwtcredentialvalidator_validate: (a: number, b: number, c: any, d: number, e: number) => [number, number, number];
@@ -5754,47 +5855,31 @@ export interface InitOutput {
   readonly jwtcredentialvalidator_checkStatusWithStatusList2021: (a: number, b: number, c: number) => [number, number];
   readonly jwtcredentialvalidator_extractIssuer: (a: number) => [number, number, number];
   readonly jwtcredentialvalidator_extractIssuerFromJwt: (a: number) => [number, number, number];
-  readonly __wbg_keybindingjwtvalidationoptions_free: (a: number, b: number) => void;
-  readonly keybindingjwtvalidationoptions_new: (a: number) => [number, number, number];
-  readonly keybindingjwtvalidationoptions_toJSON: (a: number) => [number, number, number];
-  readonly keybindingjwtvalidationoptions_fromJSON: (a: any) => [number, number, number];
-  readonly keybindingjwtvalidationoptions_clone: (a: number) => number;
-  readonly __wbg_jwtcredentialvalidationoptions_free: (a: number, b: number) => void;
-  readonly jwtcredentialvalidationoptions_new: (a: number) => [number, number, number];
-  readonly jwtcredentialvalidationoptions_toJSON: (a: number) => [number, number, number];
-  readonly jwtcredentialvalidationoptions_fromJSON: (a: any) => [number, number, number];
-  readonly jwtcredentialvalidationoptions_clone: (a: number) => number;
   readonly __wbg_sdjwtcredentialvalidator_free: (a: number, b: number) => void;
   readonly sdjwtcredentialvalidator_new: (a: number) => number;
   readonly sdjwtcredentialvalidator_validateCredential: (a: number, b: number, c: any, d: number, e: number) => [number, number, number];
   readonly sdjwtcredentialvalidator_verifySignature: (a: number, b: number, c: any, d: number) => [number, number, number];
   readonly sdjwtcredentialvalidator_validateKeyBindingJwt: (a: number, b: number, c: any, d: number) => [number, number, number];
+  readonly __wbg_unknowncredential_free: (a: number, b: number) => void;
+  readonly unknowncredential_tryIntoJwt: (a: number) => number;
+  readonly unknowncredential_tryIntoCredential: (a: number) => number;
+  readonly unknowncredential_tryIntoRaw: (a: number) => any;
+  readonly unknowncredential_toJSON: (a: number) => [number, number, number];
+  readonly unknowncredential_fromJSON: (a: any) => [number, number, number];
+  readonly unknowncredential_clone: (a: number) => number;
+  readonly __wbg_decodedjwtpresentation_free: (a: number, b: number) => void;
+  readonly decodedjwtpresentation_presentation: (a: number) => number;
+  readonly decodedjwtpresentation_protectedHeader: (a: number) => number;
+  readonly decodedjwtpresentation_intoPresentation: (a: number) => number;
+  readonly decodedjwtpresentation_expirationDate: (a: number) => number;
+  readonly decodedjwtpresentation_issuanceDate: (a: number) => number;
+  readonly decodedjwtpresentation_audience: (a: number) => [number, number];
+  readonly decodedjwtpresentation_customClaims: (a: number) => any;
   readonly __wbg_jwtpresentationvalidator_free: (a: number, b: number) => void;
   readonly jwtpresentationvalidator_new: (a: number) => number;
   readonly jwtpresentationvalidator_validate: (a: number, b: number, c: any, d: number) => [number, number, number];
   readonly jwtpresentationvalidator_checkStructure: (a: number) => [number, number];
   readonly jwtpresentationvalidator_extractHolder: (a: number) => [number, number, number];
-  readonly __wbg_jwtpresentationvalidationoptions_free: (a: number, b: number) => void;
-  readonly jwtpresentationvalidationoptions_new: (a: number) => [number, number, number];
-  readonly jwtpresentationvalidationoptions_toJSON: (a: number) => [number, number, number];
-  readonly jwtpresentationvalidationoptions_fromJSON: (a: any) => [number, number, number];
-  readonly jwtpresentationvalidationoptions_clone: (a: number) => number;
-  readonly __wbg_linkeddomainservice_free: (a: number, b: number) => void;
-  readonly linkeddomainservice_new: (a: any) => [number, number, number];
-  readonly linkeddomainservice_domains: (a: number) => any;
-  readonly linkeddomainservice_toService: (a: number) => number;
-  readonly linkeddomainservice_fromService: (a: number) => [number, number, number];
-  readonly linkeddomainservice_isValid: (a: number) => number;
-  readonly linkeddomainservice_clone: (a: number) => number;
-  readonly __wbg_linkedverifiablepresentationservice_free: (a: number, b: number) => void;
-  readonly linkedverifiablepresentationservice_new: (a: any) => [number, number, number];
-  readonly linkedverifiablepresentationservice_verifiablePresentationUrls: (a: number) => any;
-  readonly linkedverifiablepresentationservice_toService: (a: number) => number;
-  readonly linkedverifiablepresentationservice_fromService: (a: number) => [number, number, number];
-  readonly linkedverifiablepresentationservice_isValid: (a: number) => number;
-  readonly linkedverifiablepresentationservice_clone: (a: number) => number;
-  readonly linkedverifiablepresentationservice_toJSON: (a: number) => [number, number, number];
-  readonly linkedverifiablepresentationservice_fromJSON: (a: any) => [number, number, number];
   readonly __wbg_presentation_free: (a: number, b: number) => void;
   readonly presentation_BaseContext: () => [number, number, number, number];
   readonly presentation_BaseType: () => [number, number];
@@ -5831,33 +5916,6 @@ export interface InitOutput {
   readonly statuslist2021credentialbuilder_type: (a: number, b: number, c: number) => number;
   readonly statuslist2021credentialbuilder_proof: (a: number, b: number) => number;
   readonly statuslist2021credentialbuilder_build: (a: number) => [number, number, number];
-  readonly __wbg_statuslist2021entry_free: (a: number, b: number) => void;
-  readonly statuslist2021entry_new: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
-  readonly statuslist2021entry_id: (a: number) => [number, number];
-  readonly statuslist2021entry_purpose: (a: number) => number;
-  readonly statuslist2021entry_index: (a: number) => number;
-  readonly statuslist2021entry_statusListCredential: (a: number) => [number, number];
-  readonly statuslist2021entry_toStatus: (a: number) => [number, number, number];
-  readonly statuslist2021entry_clone: (a: number) => number;
-  readonly statuslist2021entry_toJSON: (a: number) => [number, number, number];
-  readonly statuslist2021entry_fromJSON: (a: any) => [number, number, number];
-  readonly __wbg_coredid_free: (a: number, b: number) => void;
-  readonly coredid_parse: (a: number, b: number) => [number, number, number];
-  readonly coredid_setMethodName: (a: number, b: number, c: number) => [number, number];
-  readonly coredid_validMethodName: (a: number, b: number) => number;
-  readonly coredid_setMethodId: (a: number, b: number, c: number) => [number, number];
-  readonly coredid_validMethodId: (a: number, b: number) => number;
-  readonly coredid_scheme: (a: number) => [number, number];
-  readonly coredid_authority: (a: number) => [number, number];
-  readonly coredid_method: (a: number) => [number, number];
-  readonly coredid_methodId: (a: number) => [number, number];
-  readonly coredid_join: (a: number, b: number, c: number) => [number, number, number];
-  readonly coredid_toUrl: (a: number) => number;
-  readonly coredid_intoUrl: (a: number) => number;
-  readonly coredid_toString: (a: number) => [number, number];
-  readonly coredid_toJSON: (a: number) => [number, number, number];
-  readonly coredid_fromJSON: (a: any) => [number, number, number];
-  readonly coredid_clone: (a: number) => number;
   readonly __wbg_coredocument_free: (a: number, b: number) => void;
   readonly coredocument_new: (a: any) => [number, number, number];
   readonly coredocument_id: (a: number) => [number, number, number];
@@ -5899,6 +5957,368 @@ export interface InitOutput {
   readonly coredocument_createCredentialJwt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
   readonly coredocument_createPresentationJwt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
   readonly coredocument_expandDIDJwk: (a: number) => [number, number, number];
+  readonly __wbg_iotadocument_free: (a: number, b: number) => void;
+  readonly iotadocument_new: (a: number, b: number) => [number, number, number];
+  readonly iotadocument_newWithId: (a: number) => number;
+  readonly iotadocument_id: (a: number) => [number, number, number];
+  readonly iotadocument_controller: (a: number) => [number, number, number];
+  readonly iotadocument_setController: (a: number, b: any) => [number, number];
+  readonly iotadocument_alsoKnownAs: (a: number) => [number, number, number];
+  readonly iotadocument_setAlsoKnownAs: (a: number, b: any) => [number, number];
+  readonly iotadocument_properties: (a: number) => [number, number, number];
+  readonly iotadocument_setPropertyUnchecked: (a: number, b: number, c: number, d: any) => [number, number];
+  readonly iotadocument_service: (a: number) => [number, number, number];
+  readonly iotadocument_insertService: (a: number, b: number) => [number, number];
+  readonly iotadocument_removeService: (a: number, b: number) => [number, number, number];
+  readonly iotadocument_resolveService: (a: number, b: any) => [number, number, number];
+  readonly iotadocument_methods: (a: number, b: number) => [number, number, number];
+  readonly iotadocument_insertMethod: (a: number, b: number, c: number) => [number, number];
+  readonly iotadocument_removeMethod: (a: number, b: number) => [number, number, number];
+  readonly iotadocument_resolveMethod: (a: number, b: any, c: number) => [number, number, number];
+  readonly iotadocument_attachMethodRelationship: (a: number, b: number, c: number) => [number, number, number];
+  readonly iotadocument_detachMethodRelationship: (a: number, b: number, c: number) => [number, number, number];
+  readonly iotadocument_verifyJws: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+  readonly iotadocument_pack: (a: number) => [number, number, number, number];
+  readonly iotadocument_packWithEncoding: (a: number, b: number) => [number, number, number, number];
+  readonly iotadocument_metadata: (a: number) => [number, number, number];
+  readonly iotadocument_metadataCreated: (a: number) => [number, number, number];
+  readonly iotadocument_setMetadataCreated: (a: number, b: any) => [number, number];
+  readonly iotadocument_metadataUpdated: (a: number) => [number, number, number];
+  readonly iotadocument_setMetadataUpdated: (a: number, b: any) => [number, number];
+  readonly iotadocument_metadataDeactivated: (a: number) => [number, number, number];
+  readonly iotadocument_setMetadataDeactivated: (a: number, b: number) => [number, number];
+  readonly iotadocument_setMetadataPropertyUnchecked: (a: number, b: number, c: number, d: any) => [number, number];
+  readonly iotadocument_revokeCredentials: (a: number, b: any, c: any) => [number, number];
+  readonly iotadocument_unrevokeCredentials: (a: number, b: any, c: any) => [number, number];
+  readonly iotadocument_clone: (a: number) => [number, number, number];
+  readonly iotadocument__shallowCloneInternal: (a: number) => number;
+  readonly iotadocument__strongCountInternal: (a: number) => number;
+  readonly iotadocument_toJSON: (a: number) => [number, number, number];
+  readonly iotadocument_fromJSON: (a: any) => [number, number, number];
+  readonly iotadocument_toCoreDocument: (a: number) => [number, number, number];
+  readonly iotadocument_generateMethod: (a: number, b: number, c: number, d: number, e: any, f: number, g: number, h: number) => [number, number, number];
+  readonly iotadocument_purgeMethod: (a: number, b: number, c: number) => [number, number, number];
+  readonly iotadocument_createJwt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
+  readonly iotadocument_createJws: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
+  readonly iotadocument_createCredentialJwt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
+  readonly iotadocument_createPresentationJwt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
+  readonly iotadocument_generateMethodJwp: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+  readonly iotadocument_createIssuedJwp: (a: number, b: number, c: number, d: number, e: any, f: number) => [number, number, number];
+  readonly iotadocument_createPresentedJwp: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+  readonly iotadocument_createCredentialJpt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
+  readonly iotadocument_createPresentationJpt: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+  readonly __wbg_jwsheader_free: (a: number, b: number) => void;
+  readonly jwsheader_new: () => number;
+  readonly jwsheader_alg: (a: number) => any;
+  readonly jwsheader_setAlg: (a: number, b: any) => [number, number];
+  readonly jwsheader_b64: (a: number) => number;
+  readonly jwsheader_setB64: (a: number, b: number) => void;
+  readonly jwsheader_custom: (a: number) => any;
+  readonly jwsheader_has: (a: number, b: number, c: number) => number;
+  readonly jwsheader_isDisjoint: (a: number, b: number) => number;
+  readonly jwsheader_jku: (a: number) => [number, number];
+  readonly jwsheader_setJku: (a: number, b: number, c: number) => [number, number];
+  readonly jwsheader_jwk: (a: number) => number;
+  readonly jwsheader_setJwk: (a: number, b: number) => void;
+  readonly jwsheader_kid: (a: number) => [number, number];
+  readonly jwsheader_setKid: (a: number, b: number, c: number) => void;
+  readonly jwsheader_x5u: (a: number) => [number, number];
+  readonly jwsheader_setX5u: (a: number, b: number, c: number) => [number, number];
+  readonly jwsheader_setX5c: (a: number, b: any) => [number, number];
+  readonly jwsheader_x5t: (a: number) => [number, number];
+  readonly jwsheader_setX5t: (a: number, b: number, c: number) => void;
+  readonly jwsheader_x5tS256: (a: number) => [number, number];
+  readonly jwsheader_setX5tS256: (a: number, b: number, c: number) => void;
+  readonly jwsheader_typ: (a: number) => [number, number];
+  readonly jwsheader_setTyp: (a: number, b: number, c: number) => void;
+  readonly jwsheader_cty: (a: number) => [number, number];
+  readonly jwsheader_setCty: (a: number, b: number, c: number) => void;
+  readonly jwsheader_crit: (a: number) => any;
+  readonly jwsheader_setCrit: (a: number, b: any) => [number, number];
+  readonly jwsheader_url: (a: number) => [number, number];
+  readonly jwsheader_setUrl: (a: number, b: number, c: number) => [number, number];
+  readonly jwsheader_nonce: (a: number) => [number, number];
+  readonly jwsheader_setNonce: (a: number, b: number, c: number) => void;
+  readonly jwsheader_toJSON: (a: number) => [number, number, number];
+  readonly jwsheader_fromJSON: (a: any) => [number, number, number];
+  readonly jwsheader_clone: (a: number) => number;
+  readonly jwkstorage_generateBBS: (a: number, b: number) => any;
+  readonly jwkstorage_signBBS: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => any;
+  readonly jwkstorage_updateBBSSignature: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => any;
+  readonly __wbg_methoddata_free: (a: number, b: number) => void;
+  readonly methoddata_newBase58: (a: number, b: number) => number;
+  readonly methoddata_newMultibase: (a: number, b: number) => number;
+  readonly methoddata_newJwk: (a: number) => [number, number, number];
+  readonly methoddata_newCustom: (a: number, b: number, c: any) => [number, number, number];
+  readonly methoddata_tryCustom: (a: number) => [number, number, number];
+  readonly methoddata_tryDecode: (a: number) => [number, number, number, number];
+  readonly methoddata_tryPublicKeyJwk: (a: number) => [number, number, number];
+  readonly methoddata_toJSON: (a: number) => [number, number, number];
+  readonly methoddata_fromJSON: (a: any) => [number, number, number];
+  readonly methoddata_clone: (a: number) => number;
+  readonly __wbg_custommethoddata_free: (a: number, b: number) => void;
+  readonly custommethoddata_new: (a: number, b: number, c: any) => [number, number, number];
+  readonly custommethoddata_clone: (a: number) => number;
+  readonly custommethoddata_toJSON: (a: number) => [number, number, number];
+  readonly custommethoddata_fromJSON: (a: any) => [number, number, number];
+  readonly __wbg_verificationmethod_free: (a: number, b: number) => void;
+  readonly verificationmethod_newFromJwk: (a: any, b: number, c: number, d: number) => [number, number, number];
+  readonly verificationmethod_new: (a: number, b: number, c: number, d: number) => [number, number, number];
+  readonly verificationmethod_id: (a: number) => number;
+  readonly verificationmethod_setId: (a: number, b: number) => [number, number];
+  readonly verificationmethod_controller: (a: number) => number;
+  readonly verificationmethod_setController: (a: number, b: number) => void;
+  readonly verificationmethod_type: (a: number) => number;
+  readonly verificationmethod_setType: (a: number, b: number) => void;
+  readonly verificationmethod_data: (a: number) => number;
+  readonly verificationmethod_setData: (a: number, b: number) => void;
+  readonly verificationmethod_properties: (a: number) => [number, number, number];
+  readonly verificationmethod_setPropertyUnchecked: (a: number, b: number, c: number, d: any) => [number, number];
+  readonly verificationmethod_toJSON: (a: number) => [number, number, number];
+  readonly verificationmethod_fromJSON: (a: any) => [number, number, number];
+  readonly verificationmethod_clone: (a: number) => number;
+  readonly __wbg_controllerandvotingpower_free: (a: number, b: number) => void;
+  readonly __wbg_get_controllerandvotingpower_0: (a: number) => [number, number];
+  readonly __wbg_set_controllerandvotingpower_0: (a: number, b: number, c: number) => void;
+  readonly __wbg_get_controllerandvotingpower_1: (a: number) => bigint;
+  readonly __wbg_set_controllerandvotingpower_1: (a: number, b: bigint) => void;
+  readonly __wbg_get_controllerandvotingpower_2: (a: number) => number;
+  readonly __wbg_set_controllerandvotingpower_2: (a: number, b: number) => void;
+  readonly controllerandvotingpower_new: (a: number, b: number, c: bigint, d: number) => number;
+  readonly __wbg_onchainidentity_free: (a: number, b: number) => void;
+  readonly onchainidentity_getById: (a: number, b: number, c: any) => any;
+  readonly onchainidentity_id: (a: number) => [number, number, number, number];
+  readonly onchainidentity_didDocument: (a: number) => [number, number, number];
+  readonly onchainidentity_hasDeletedDid: (a: number) => [number, number, number];
+  readonly onchainidentity_isShared: (a: number) => [number, number, number];
+  readonly onchainidentity_getControllerToken: (a: number, b: number) => any;
+  readonly onchainidentity_getControllerTokenForAddress: (a: number, b: number, c: number, d: number) => any;
+  readonly onchainidentity_proposals: (a: number) => [number, number, number];
+  readonly onchainidentity_updateDidDocument: (a: number, b: number, c: number, d: number, e: bigint) => number;
+  readonly onchainidentity_deactivateDid: (a: number, b: number, c: number, d: bigint) => number;
+  readonly onchainidentity_deleteDid: (a: number, b: number, c: number, d: bigint) => number;
+  readonly onchainidentity_updateConfig: (a: number, b: number, c: number, d: number, e: bigint) => number;
+  readonly onchainidentity_sendAssets: (a: number, b: number, c: number, d: number, e: number, f: bigint) => [number, number, number];
+  readonly onchainidentity_revokeDelegationToken: (a: number, b: number, c: number) => [number, number, number];
+  readonly onchainidentity_unrevokeDelegationToken: (a: number, b: number, c: number) => [number, number, number];
+  readonly onchainidentity_deleteDelegationToken: (a: number, b: number) => [number, number, number];
+  readonly onchainidentity_borrowAssets: (a: number, b: number, c: number, d: number, e: number, f: number, g: bigint) => [number, number, number];
+  readonly onchainidentity_controllerExecution: (a: number, b: number, c: number, d: number, e: number, f: number, g: bigint) => [number, number, number];
+  readonly onchainidentity_accessSubIdentity: (a: number, b: number, c: number, d: number, e: number, f: bigint) => number;
+  readonly __wbg_identitybuilder_free: (a: number, b: number) => void;
+  readonly identitybuilder_new: (a: number) => [number, number, number];
+  readonly identitybuilder_controller: (a: number, b: number, c: number, d: bigint, e: number) => [number, number, number];
+  readonly identitybuilder_threshold: (a: number, b: bigint) => number;
+  readonly identitybuilder_controllers: (a: number, b: number, c: number) => [number, number, number];
+  readonly identitybuilder_finish: (a: number) => number;
+  readonly __wbg_createidentity_free: (a: number, b: number) => void;
+  readonly createidentity_new: (a: number) => number;
+  readonly createidentity_buildProgrammableTransaction: (a: number, b: any) => any;
+  readonly createidentity_apply: (a: number, b: any, c: any) => any;
+  readonly jwsheader_x5c: (a: number) => any;
+  readonly __wbg_borrow_free: (a: number, b: number) => void;
+  readonly __wbg_get_borrow_borrow_fn: (a: number) => any;
+  readonly __wbg_set_borrow_borrow_fn: (a: number, b: number) => void;
+  readonly borrow_new: (a: number, b: number, c: number) => [number, number, number];
+  readonly borrow_objects: (a: number) => [number, number];
+  readonly __wbg_borrowproposal_free: (a: number, b: number) => void;
+  readonly borrowproposal_id: (a: number) => [number, number, number, number];
+  readonly borrowproposal_action: (a: number) => [number, number, number];
+  readonly borrowproposal_expiration_epoch: (a: number) => [number, bigint, number, number];
+  readonly borrowproposal_votes: (a: number) => [bigint, number, number];
+  readonly borrowproposal_voters: (a: number) => [number, number, number];
+  readonly borrowproposal_set_borrowFn: (a: number, b: any) => [number, number];
+  readonly borrowproposal_approve: (a: number, b: number, c: number) => [number, number, number];
+  readonly borrowproposal_intoTx: (a: number, b: number, c: number) => number;
+  readonly __wbg_approveborrowproposal_free: (a: number, b: number) => void;
+  readonly approveborrowproposal_buildProgrammableTransaction: (a: number, b: any) => any;
+  readonly approveborrowproposal_apply: (a: number, b: any, c: any) => any;
+  readonly __wbg_executeborrowproposal_free: (a: number, b: number) => void;
+  readonly executeborrowproposal_new: (a: number, b: number, c: number) => number;
+  readonly executeborrowproposal_buildProgrammableTransaction: (a: number, b: any) => any;
+  readonly executeborrowproposal_apply: (a: number, b: any, c: any) => any;
+  readonly __wbg_createborrowproposal_free: (a: number, b: number) => void;
+  readonly createborrowproposal_buildProgrammableTransaction: (a: number, b: any) => any;
+  readonly createborrowproposal_apply: (a: number, b: any, c: any) => any;
+  readonly __wbg_configchange_free: (a: number, b: number) => void;
+  readonly __wbg_get_configchange_threshold: (a: number) => [number, bigint];
+  readonly __wbg_set_configchange_threshold: (a: number, b: number, c: bigint) => void;
+  readonly __wbg_get_configchange_controllersToAdd: (a: number) => any;
+  readonly __wbg_set_configchange_controllersToAdd: (a: number, b: number) => void;
+  readonly __wbg_get_configchange_controllersToRemove: (a: number) => any;
+  readonly __wbg_set_configchange_controllersToRemove: (a: number, b: number) => void;
+  readonly __wbg_get_configchange_controllersToUpdate: (a: number) => any;
+  readonly __wbg_set_configchange_controllersToUpdate: (a: number, b: number) => void;
+  readonly __wbg_configchangeproposal_free: (a: number, b: number) => void;
+  readonly configchangeproposal_id: (a: number) => [number, number, number, number];
+  readonly configchangeproposal_action: (a: number) => [number, number, number];
+  readonly configchangeproposal_expiration_epoch: (a: number) => [number, bigint, number, number];
+  readonly configchangeproposal_votes: (a: number) => [bigint, number, number];
+  readonly configchangeproposal_voters: (a: number) => [number, number, number];
+  readonly configchangeproposal_approve: (a: number, b: number, c: number) => number;
+  readonly configchangeproposal_intoTx: (a: number, b: number, c: number) => number;
+  readonly __wbg_approveconfigchangeproposal_free: (a: number, b: number) => void;
+  readonly approveconfigchangeproposal_buildProgrammableTransaction: (a: number, b: any) => any;
+  readonly approveconfigchangeproposal_apply: (a: number, b: any, c: any) => any;
+  readonly __wbg_executeconfigchangeproposal_free: (a: number, b: number) => void;
+  readonly executeconfigchangeproposal_buildProgrammableTransaction: (a: number, b: any) => any;
+  readonly executeconfigchangeproposal_apply: (a: number, b: any, c: any) => any;
+  readonly __wbg_createconfigchangeproposal_free: (a: number, b: number) => void;
+  readonly createconfigchangeproposal_buildProgrammableTransaction: (a: number, b: any) => any;
+  readonly createconfigchangeproposal_apply: (a: number, b: any, c: any) => any;
+  readonly __wbg_controllerexecution_free: (a: number, b: number) => void;
+  readonly controllerexecution_new: (a: number, b: number, c: number, d: number) => [number, number, number];
+  readonly controllerexecution_controllerCap: (a: number) => [number, number];
+  readonly controllerexecution_identityAddress: (a: number) => [number, number];
+  readonly __wbg_controllerexecutionproposal_free: (a: number, b: number) => void;
+  readonly controllerexecutionproposal_id: (a: number) => [number, number, number, number];
+  readonly controllerexecutionproposal_action: (a: number) => [number, number, number];
+  readonly controllerexecutionproposal_expiration_epoch: (a: number) => [number, bigint, number, number];
+  readonly controllerexecutionproposal_votes: (a: number) => [bigint, number, number];
+  readonly controllerexecutionproposal_voters: (a: number) => [number, number, number];
+  readonly controllerexecutionproposal_set_execFn: (a: number, b: any) => [number, number];
+  readonly controllerexecutionproposal_approve: (a: number, b: number, c: number) => [number, number, number];
+  readonly controllerexecutionproposal_intoTx: (a: number, b: number, c: number) => number;
+  readonly __wbg_approvecontrollerexecutionproposal_free: (a: number, b: number) => void;
+  readonly approvecontrollerexecutionproposal_buildProgrammableTransaction: (a: number, b: any) => any;
+  readonly approvecontrollerexecutionproposal_apply: (a: number, b: any, c: any) => any;
+  readonly __wbg_executecontrollerexecutionproposal_free: (a: number, b: number) => void;
+  readonly executecontrollerexecutionproposal_new: (a: number, b: number, c: number) => number;
+  readonly executecontrollerexecutionproposal_buildProgrammableTransaction: (a: number, b: any) => any;
+  readonly executecontrollerexecutionproposal_apply: (a: number, b: any, c: any) => any;
+  readonly __wbg_createcontrollerexecutionproposal_free: (a: number, b: number) => void;
+  readonly createcontrollerexecutionproposal_buildProgrammableTransaction: (a: number, b: any) => any;
+  readonly createcontrollerexecutionproposal_apply: (a: number, b: any, c: any) => any;
+  readonly __wbg_sendaction_free: (a: number, b: number) => void;
+  readonly sendaction_objectRecipientMap: (a: number) => [number, number];
+  readonly __wbg_sendproposal_free: (a: number, b: number) => void;
+  readonly sendproposal_id: (a: number) => [number, number, number, number];
+  readonly sendproposal_action: (a: number) => [number, number, number];
+  readonly sendproposal_expiration_epoch: (a: number) => [number, bigint, number, number];
+  readonly sendproposal_votes: (a: number) => [bigint, number, number];
+  readonly sendproposal_voters: (a: number) => [number, number, number];
+  readonly sendproposal_approve: (a: number, b: number, c: number) => number;
+  readonly sendproposal_intoTx: (a: number, b: number, c: number) => number;
+  readonly __wbg_approvesendproposal_free: (a: number, b: number) => void;
+  readonly approvesendproposal_buildProgrammableTransaction: (a: number, b: any) => any;
+  readonly approvesendproposal_apply: (a: number, b: any, c: any) => any;
+  readonly __wbg_executesendproposal_free: (a: number, b: number) => void;
+  readonly executesendproposal_buildProgrammableTransaction: (a: number, b: any) => any;
+  readonly executesendproposal_apply: (a: number, b: any, c: any) => any;
+  readonly __wbg_createsendproposal_free: (a: number, b: number) => void;
+  readonly createsendproposal_buildProgrammableTransaction: (a: number, b: any) => any;
+  readonly createsendproposal_apply: (a: number, b: any, c: any) => any;
+  readonly __wbg_accesssubidentity_free: (a: number, b: number) => void;
+  readonly __wbg_get_accesssubidentity_identity: (a: number) => [number, number];
+  readonly __wbg_set_accesssubidentity_identity: (a: number, b: number, c: number) => void;
+  readonly __wbg_get_accesssubidentity_sub_identity: (a: number) => [number, number];
+  readonly __wbg_set_accesssubidentity_sub_identity: (a: number, b: number, c: number) => void;
+  readonly accesssubidentity_new: (a: number, b: number, c: number, d: number) => number;
+  readonly accesssubidentity_toJSON: (a: number) => [number, number, number];
+  readonly __wbg_accesssubidentityproposal_free: (a: number, b: number) => void;
+  readonly accesssubidentityproposal_id: (a: number) => [number, number, number, number];
+  readonly accesssubidentityproposal_action: (a: number) => [number, number, number];
+  readonly accesssubidentityproposal_expiration_epoch: (a: number) => [number, bigint, number, number];
+  readonly accesssubidentityproposal_votes: (a: number) => [bigint, number, number];
+  readonly accesssubidentityproposal_voters: (a: number) => [number, number, number];
+  readonly accesssubidentityproposal_approve: (a: number, b: number, c: number) => number;
+  readonly accesssubidentityproposal_intoTx: (a: number, b: number, c: number, d: number, e: any) => number;
+  readonly __wbg_wasmapproveaccesssubidentityproposal_free: (a: number, b: number) => void;
+  readonly wasmapproveaccesssubidentityproposal_buildProgrammableTransaction: (a: number, b: any) => any;
+  readonly wasmapproveaccesssubidentityproposal_apply: (a: number, b: any, c: any) => any;
+  readonly __wbg_wasmaccesssubidentitytx_free: (a: number, b: number) => void;
+  readonly wasmaccesssubidentitytx_buildProgrammableTransaction: (a: number, b: any) => any;
+  readonly wasmaccesssubidentitytx_apply: (a: number, b: any, c: any) => any;
+  readonly __wbg_updatedid_free: (a: number, b: number) => void;
+  readonly updatedid_isDeactivation: (a: number) => number;
+  readonly updatedid_didDocument: (a: number) => [number, number, number];
+  readonly __wbg_updatedidproposal_free: (a: number, b: number) => void;
+  readonly updateddidproposal_id: (a: number) => [number, number, number, number];
+  readonly updateddidproposal_action: (a: number) => [number, number, number];
+  readonly updateddidproposal_expiration_epoch: (a: number) => [number, bigint, number, number];
+  readonly updateddidproposal_votes: (a: number) => [bigint, number, number];
+  readonly updateddidproposal_voters: (a: number) => [number, number, number];
+  readonly updateddidproposal_approve: (a: number, b: number, c: number) => [number, number, number];
+  readonly updateddidproposal_intoTx: (a: number, b: number, c: number) => number;
+  readonly __wbg_approveupdatediddocumentproposal_free: (a: number, b: number) => void;
+  readonly approveupdatediddocumentproposal_buildProgrammableTransaction: (a: number, b: any) => any;
+  readonly approveupdatediddocumentproposal_apply: (a: number, b: any, c: any) => any;
+  readonly __wbg_executeupdatedidproposal_free: (a: number, b: number) => void;
+  readonly executeupdatedidproposal_new: (a: number, b: number, c: number) => number;
+  readonly executeupdatedidproposal_buildProgrammableTransaction: (a: number, b: any) => any;
+  readonly executeupdatedidproposal_apply: (a: number, b: any, c: any) => any;
+  readonly __wbg_createupdatedidproposal_free: (a: number, b: number) => void;
+  readonly createupdatedidproposal_buildProgrammableTransaction: (a: number, b: any) => any;
+  readonly createupdatedidproposal_apply: (a: number, b: any, c: any) => any;
+  readonly __wbg_get_controllerexecution_controller_exec_fn: (a: number) => any;
+  readonly __wbg_set_controllerexecution_controller_exec_fn: (a: number, b: number) => void;
+  readonly __wbg_linkeddomainservice_free: (a: number, b: number) => void;
+  readonly linkeddomainservice_new: (a: any) => [number, number, number];
+  readonly linkeddomainservice_domains: (a: number) => any;
+  readonly linkeddomainservice_toService: (a: number) => number;
+  readonly linkeddomainservice_fromService: (a: number) => [number, number, number];
+  readonly linkeddomainservice_isValid: (a: number) => number;
+  readonly linkeddomainservice_clone: (a: number) => number;
+  readonly __wbg_linkedverifiablepresentationservice_free: (a: number, b: number) => void;
+  readonly linkedverifiablepresentationservice_new: (a: any) => [number, number, number];
+  readonly linkedverifiablepresentationservice_verifiablePresentationUrls: (a: number) => any;
+  readonly linkedverifiablepresentationservice_toService: (a: number) => number;
+  readonly linkedverifiablepresentationservice_fromService: (a: number) => [number, number, number];
+  readonly linkedverifiablepresentationservice_isValid: (a: number) => number;
+  readonly linkedverifiablepresentationservice_clone: (a: number) => number;
+  readonly linkedverifiablepresentationservice_toJSON: (a: number) => [number, number, number];
+  readonly linkedverifiablepresentationservice_fromJSON: (a: any) => [number, number, number];
+  readonly __wbg_service_free: (a: number, b: number) => void;
+  readonly service_new: (a: any) => [number, number, number];
+  readonly service_id: (a: number) => number;
+  readonly service_type: (a: number) => any;
+  readonly service_serviceEndpoint: (a: number) => any;
+  readonly service_properties: (a: number) => [number, number, number];
+  readonly service_toJSON: (a: number) => [number, number, number];
+  readonly service_fromJSON: (a: any) => [number, number, number];
+  readonly service_clone: (a: number) => number;
+  readonly __wbg_payloadentry_free: (a: number, b: number) => void;
+  readonly __wbg_get_payloadentry_1: (a: number) => number;
+  readonly __wbg_set_payloadentry_1: (a: number, b: number) => void;
+  readonly payloadentry_set_value: (a: number, b: any) => void;
+  readonly payloadentry_value: (a: number) => any;
+  readonly __wbg_payloads_free: (a: number, b: number) => void;
+  readonly payloads_toJSON: (a: number) => [number, number, number];
+  readonly payloads_fromJSON: (a: any) => [number, number, number];
+  readonly payloads_clone: (a: number) => number;
+  readonly payloads_new: (a: number, b: number) => [number, number, number];
+  readonly payloads_newFromValues: (a: number, b: number) => [number, number, number];
+  readonly payloads_getValues: (a: number) => [number, number, number, number];
+  readonly payloads_getUndisclosedIndexes: (a: number) => [number, number];
+  readonly payloads_getDisclosedIndexes: (a: number) => [number, number];
+  readonly payloads_getUndisclosedPayloads: (a: number) => [number, number, number, number];
+  readonly payloads_getDisclosedPayloads: (a: number) => number;
+  readonly payloads_setUndisclosed: (a: number, b: number) => void;
+  readonly payloads_replacePayloadAtIndex: (a: number, b: number, c: any) => [number, number, number];
+  readonly start: () => void;
+  readonly __wbg_jwpcredentialoptions_free: (a: number, b: number) => void;
+  readonly __wbg_get_jwpcredentialoptions_kid: (a: number) => [number, number];
+  readonly __wbg_set_jwpcredentialoptions_kid: (a: number, b: number, c: number) => void;
+  readonly jwpcredentialoptions_new: () => number;
+  readonly jwpcredentialoptions_fromJSON: (a: any) => [number, number, number];
+  readonly jwpcredentialoptions_toJSON: (a: number) => [number, number, number];
+  readonly __wbg_jptpresentationvalidationoptions_free: (a: number, b: number) => void;
+  readonly jptpresentationvalidationoptions_clone: (a: number) => number;
+  readonly jptpresentationvalidationoptions_toJSON: (a: number) => [number, number, number];
+  readonly jptpresentationvalidationoptions_fromJSON: (a: any) => [number, number, number];
+  readonly jptpresentationvalidationoptions_new: (a: number) => [number, number, number];
+  readonly __wbg_keybindingjwtvalidationoptions_free: (a: number, b: number) => void;
+  readonly keybindingjwtvalidationoptions_new: (a: number) => [number, number, number];
+  readonly keybindingjwtvalidationoptions_toJSON: (a: number) => [number, number, number];
+  readonly keybindingjwtvalidationoptions_fromJSON: (a: any) => [number, number, number];
+  readonly keybindingjwtvalidationoptions_clone: (a: number) => number;
+  readonly __wbg_proof_free: (a: number, b: number) => void;
+  readonly proof_constructor: (a: number, b: number, c: any) => [number, number, number];
+  readonly proof_type: (a: number) => [number, number];
+  readonly proof_properties: (a: number) => [number, number, number];
+  readonly proof_toJSON: (a: number) => [number, number, number];
+  readonly proof_fromJSON: (a: any) => [number, number, number];
+  readonly proof_clone: (a: number) => number;
   readonly __wbg_didurl_free: (a: number, b: number) => void;
   readonly didurl_parse: (a: number, b: number) => [number, number, number];
   readonly didurl_did: (a: number) => number;
@@ -5914,11 +6334,29 @@ export interface InitOutput {
   readonly didurl_toJSON: (a: number) => [number, number, number];
   readonly didurl_fromJSON: (a: any) => [number, number, number];
   readonly didurl_clone: (a: number) => number;
-  readonly __wbg_selectivedisclosurepresentation_free: (a: number, b: number) => void;
-  readonly selectivedisclosurepresentation_new: (a: number) => number;
-  readonly selectivedisclosurepresentation_concealInSubject: (a: number, b: number, c: number) => [number, number];
-  readonly selectivedisclosurepresentation_concealInEvidence: (a: number, b: number, c: number) => [number, number];
-  readonly selectivedisclosurepresentation_setPresentationHeader: (a: number, b: number) => void;
+  readonly __wbg_decodedjws_free: (a: number, b: number) => void;
+  readonly decodedjws_claims: (a: number) => [number, number, number, number];
+  readonly decodedjws_claimsBytes: (a: number) => [number, number];
+  readonly decodedjws_protectedHeader: (a: number) => number;
+  readonly decodedjws_clone: (a: number) => number;
+  readonly decodedjws_toJSON: (a: number) => [number, number, number];
+  readonly __wbg_disclosure_free: (a: number, b: number) => void;
+  readonly disclosure_new: (a: number, b: number, c: number, d: number, e: any) => [number, number, number];
+  readonly disclosure_parse: (a: number, b: number) => [number, number, number];
+  readonly disclosure_disclosure: (a: number) => [number, number];
+  readonly disclosure_toEncodedString: (a: number) => [number, number];
+  readonly disclosure_toString: (a: number) => [number, number];
+  readonly disclosure_salt: (a: number) => [number, number];
+  readonly disclosure_claimName: (a: number) => [number, number];
+  readonly disclosure_claimValue: (a: number) => [number, number, number];
+  readonly disclosure_toJSON: (a: number) => [number, number, number];
+  readonly disclosure_fromJSON: (a: any) => [number, number, number];
+  readonly __wbg_issuermetadata_free: (a: number, b: number) => void;
+  readonly issuermetadata_new: (a: number, b: number, c: any) => [number, number, number];
+  readonly issuermetadata_issuer: (a: number) => [number, number];
+  readonly issuermetadata_jwks: (a: number) => [number, number, number];
+  readonly issuermetadata_validate: (a: number, b: number) => [number, number];
+  readonly issuermetadata_toJSON: (a: number) => [number, number, number];
   readonly __wbg_sdjwtvcpresentationbuilder_free: (a: number, b: number) => void;
   readonly sdjwtvcpresentationbuilder_conceal: (a: number, b: number, c: number) => [number, number, number];
   readonly sdjwtvcpresentationbuilder_attachKeyBindingJwt: (a: number, b: number) => number;
@@ -5928,6 +6366,25 @@ export interface InitOutput {
   readonly __wbg_set_sdjwtvcpresentationresult_sdJwtVc: (a: number, b: number) => void;
   readonly __wbg_get_sdjwtvcpresentationresult_disclosures: (a: number) => [number, number];
   readonly __wbg_set_sdjwtvcpresentationresult_disclosures: (a: number, b: number, c: number) => void;
+  readonly __wbg_sdjwtv2_free: (a: number, b: number) => void;
+  readonly sdjwtv2_parse: (a: number, b: number) => [number, number, number];
+  readonly sdjwtv2_header: (a: number) => any;
+  readonly sdjwtv2_claims: (a: number) => [number, number, number];
+  readonly sdjwtv2_disclosures: (a: number) => [number, number];
+  readonly sdjwtv2_requiredKeyBind: (a: number) => any;
+  readonly sdjwtv2_intoDisclosedObject: (a: number) => [number, number, number];
+  readonly sdjwtv2_presentation: (a: number) => [number, number];
+  readonly sdjwtv2_toJSON: (a: number) => any;
+  readonly __wbg_sdjwtpresentationbuilder_free: (a: number, b: number) => void;
+  readonly sdjwtpresentationbuilder_new: (a: number, b: any) => [number, number, number];
+  readonly sdjwtpresentationbuilder_conceal: (a: number, b: number, c: number) => [number, number, number];
+  readonly sdjwtpresentationbuilder_attachKeyBindingJwt: (a: number, b: number) => number;
+  readonly sdjwtpresentationbuilder_finish: (a: number) => [number, number, number];
+  readonly __wbg_sdjwtpresentationresult_free: (a: number, b: number) => void;
+  readonly __wbg_get_sdjwtpresentationresult_sdJwt: (a: number) => number;
+  readonly __wbg_set_sdjwtpresentationresult_sdJwt: (a: number, b: number) => void;
+  readonly __wbg_get_sdjwtpresentationresult_disclosures: (a: number) => [number, number];
+  readonly __wbg_set_sdjwtpresentationresult_disclosures: (a: number, b: number, c: number) => void;
   readonly __wbg_sdjwtvc_free: (a: number, b: number) => void;
   readonly sdjwtvc_clone: (a: number) => number;
   readonly sdjwtvc_parse: (a: number, b: number) => [number, number, number];
@@ -5946,53 +6403,144 @@ export interface InitOutput {
   readonly sdjwtvc_intoPresentation: (a: number, b: any) => [number, number, number];
   readonly sdjwtvc_toJSON: (a: number) => any;
   readonly vctToUrl: (a: number, b: number) => [number, number];
-  readonly __wbg_proofupdatectx_free: (a: number, b: number) => void;
-  readonly __wbg_get_proofupdatectx_old_start_validity_timeframe: (a: number) => [number, number];
-  readonly __wbg_set_proofupdatectx_old_start_validity_timeframe: (a: number, b: number, c: number) => void;
-  readonly __wbg_get_proofupdatectx_new_start_validity_timeframe: (a: number) => [number, number];
-  readonly __wbg_set_proofupdatectx_new_start_validity_timeframe: (a: number, b: number, c: number) => void;
-  readonly __wbg_get_proofupdatectx_old_end_validity_timeframe: (a: number) => [number, number];
-  readonly __wbg_set_proofupdatectx_old_end_validity_timeframe: (a: number, b: number, c: number) => void;
-  readonly __wbg_get_proofupdatectx_new_end_validity_timeframe: (a: number) => [number, number];
-  readonly __wbg_set_proofupdatectx_new_end_validity_timeframe: (a: number, b: number, c: number) => void;
-  readonly __wbg_get_proofupdatectx_index_start_validity_timeframe: (a: number) => number;
-  readonly __wbg_set_proofupdatectx_index_start_validity_timeframe: (a: number, b: number) => void;
-  readonly __wbg_get_proofupdatectx_index_end_validity_timeframe: (a: number) => number;
-  readonly __wbg_set_proofupdatectx_index_end_validity_timeframe: (a: number, b: number) => void;
-  readonly __wbg_get_proofupdatectx_number_of_signed_messages: (a: number) => number;
-  readonly __wbg_set_proofupdatectx_number_of_signed_messages: (a: number, b: number) => void;
-  readonly jwkstorage_generateBBS: (a: number, b: number) => any;
-  readonly jwkstorage_signBBS: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => any;
-  readonly jwkstorage_updateBBSSignature: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => any;
-  readonly __wbg_verificationmethod_free: (a: number, b: number) => void;
-  readonly verificationmethod_newFromJwk: (a: any, b: number, c: number, d: number) => [number, number, number];
-  readonly verificationmethod_new: (a: number, b: number, c: number, d: number) => [number, number, number];
-  readonly verificationmethod_id: (a: number) => number;
-  readonly verificationmethod_setId: (a: number, b: number) => [number, number];
-  readonly verificationmethod_controller: (a: number) => number;
-  readonly verificationmethod_setController: (a: number, b: number) => void;
-  readonly verificationmethod_type: (a: number) => number;
-  readonly verificationmethod_setType: (a: number, b: number) => void;
-  readonly verificationmethod_data: (a: number) => number;
-  readonly verificationmethod_setData: (a: number, b: number) => void;
-  readonly verificationmethod_properties: (a: number) => [number, number, number];
-  readonly verificationmethod_setPropertyUnchecked: (a: number, b: number, c: number, d: any) => [number, number];
-  readonly verificationmethod_toJSON: (a: number) => [number, number, number];
-  readonly verificationmethod_fromJSON: (a: any) => [number, number, number];
-  readonly verificationmethod_clone: (a: number) => number;
+  readonly __wbg_jwkgenoutput_free: (a: number, b: number) => void;
+  readonly jwkgenoutput_new: (a: number, b: number, c: number) => number;
+  readonly jwkgenoutput_jwk: (a: number) => number;
+  readonly jwkgenoutput_keyId: (a: number) => [number, number];
+  readonly jwkgenoutput_toJSON: (a: number) => [number, number, number];
+  readonly jwkgenoutput_fromJSON: (a: any) => [number, number, number];
+  readonly jwkgenoutput_clone: (a: number) => number;
+  readonly __wbg_jwssignatureoptions_free: (a: number, b: number) => void;
+  readonly jwssignatureoptions_new: (a: number) => [number, number, number];
+  readonly jwssignatureoptions_setAttachJwk: (a: number, b: number) => void;
+  readonly jwssignatureoptions_setB64: (a: number, b: number) => void;
+  readonly jwssignatureoptions_setTyp: (a: number, b: number, c: number) => void;
+  readonly jwssignatureoptions_setCty: (a: number, b: number, c: number) => void;
+  readonly jwssignatureoptions_serUrl: (a: number, b: number, c: number) => [number, number];
+  readonly jwssignatureoptions_setNonce: (a: number, b: number, c: number) => void;
+  readonly jwssignatureoptions_setKid: (a: number, b: number, c: number) => void;
+  readonly jwssignatureoptions_setDetachedPayload: (a: number, b: number) => void;
+  readonly jwssignatureoptions_setCustomHeaderParameters: (a: number, b: any) => [number, number];
+  readonly jwssignatureoptions_toJSON: (a: number) => [number, number, number];
+  readonly jwssignatureoptions_fromJSON: (a: any) => [number, number, number];
+  readonly jwssignatureoptions_clone: (a: number) => number;
+  readonly verifyEd25519: (a: any, b: number, c: number, d: number, e: number, f: number) => [number, number];
+  readonly __wbg_eddsajwsverifier_free: (a: number, b: number) => void;
+  readonly eddsajwsverifier_new: () => number;
+  readonly eddsajwsverifier_verify: (a: number, b: any, c: number, d: number, e: number, f: number, g: number) => [number, number];
+  readonly __wbg_ecdsajwsverifier_free: (a: number, b: number) => void;
+  readonly ecdsajwsverifier_new: () => number;
+  readonly ecdsajwsverifier_verify: (a: number, b: any, c: number, d: number, e: number, f: number, g: number) => [number, number];
+  readonly sdjwtv2_toString: (a: number) => any;
   readonly sdjwtvcpresentationbuilder_new: (a: number, b: any) => [number, number, number];
-  readonly coredid_toCoreDid: (a: number) => number;
   readonly sdjwtvc_toString: (a: number) => any;
-  readonly __wbg_jpt_free: (a: number, b: number) => void;
-  readonly jpt_new: (a: number, b: number) => number;
-  readonly jpt_toString: (a: number) => [number, number];
-  readonly jpt_clone: (a: number) => number;
   readonly __wbg_jwppresentationoptions_free: (a: number, b: number) => void;
   readonly __wbg_get_jwppresentationoptions_audience: (a: number) => [number, number];
   readonly __wbg_set_jwppresentationoptions_audience: (a: number, b: number, c: number) => void;
   readonly __wbg_get_jwppresentationoptions_nonce: (a: number) => [number, number];
   readonly __wbg_set_jwppresentationoptions_nonce: (a: number, b: number, c: number) => void;
   readonly jwppresentationoptions_new: () => number;
+  readonly __wbg_jwtcredentialvalidationoptions_free: (a: number, b: number) => void;
+  readonly jwtcredentialvalidationoptions_new: (a: number) => [number, number, number];
+  readonly jwtcredentialvalidationoptions_toJSON: (a: number) => [number, number, number];
+  readonly jwtcredentialvalidationoptions_fromJSON: (a: any) => [number, number, number];
+  readonly jwtcredentialvalidationoptions_clone: (a: number) => number;
+  readonly __wbg_jwtpresentationvalidationoptions_free: (a: number, b: number) => void;
+  readonly jwtpresentationvalidationoptions_new: (a: number) => [number, number, number];
+  readonly jwtpresentationvalidationoptions_toJSON: (a: number) => [number, number, number];
+  readonly jwtpresentationvalidationoptions_fromJSON: (a: any) => [number, number, number];
+  readonly jwtpresentationvalidationoptions_clone: (a: number) => number;
+  readonly __wbg_statuslist2021_free: (a: number, b: number) => void;
+  readonly statuslist2021_clone: (a: number) => number;
+  readonly statuslist2021_new: (a: number) => [number, number, number];
+  readonly statuslist2021_len: (a: number) => number;
+  readonly statuslist2021_get: (a: number, b: number) => [number, number, number];
+  readonly statuslist2021_set: (a: number, b: number, c: number) => [number, number];
+  readonly statuslist2021_intoEncodedStr: (a: number) => [number, number];
+  readonly statuslist2021_fromEncodedStr: (a: number, b: number) => [number, number, number];
+  readonly __wbg_revocationtimeframestatus_free: (a: number, b: number) => void;
+  readonly revocationtimeframestatus_clone: (a: number) => number;
+  readonly revocationtimeframestatus_toJSON: (a: number) => [number, number, number];
+  readonly revocationtimeframestatus_fromJSON: (a: any) => [number, number, number];
+  readonly revocationtimeframestatus_new: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+  readonly revocationtimeframestatus_startValidityTimeframe: (a: number) => number;
+  readonly revocationtimeframestatus_endValidityTimeframe: (a: number) => number;
+  readonly revocationtimeframestatus_id: (a: number) => [number, number];
+  readonly revocationtimeframestatus_index: (a: number) => number;
+  readonly __wbg_jwsverificationoptions_free: (a: number, b: number) => void;
+  readonly jwsverificationoptions_new: (a: number) => [number, number, number];
+  readonly jwsverificationoptions_setNonce: (a: number, b: number, c: number) => void;
+  readonly jwsverificationoptions_setMethodScope: (a: number, b: number) => void;
+  readonly jwsverificationoptions_setMethodId: (a: number, b: number) => void;
+  readonly jwsverificationoptions_toJSON: (a: number) => [number, number, number];
+  readonly jwsverificationoptions_fromJSON: (a: any) => [number, number, number];
+  readonly jwsverificationoptions_clone: (a: number) => number;
+  readonly encodeB64: (a: number, b: number) => [number, number];
+  readonly decodeB64: (a: number, b: number) => [number, number, number, number];
+  readonly __wbg_resolver_free: (a: number, b: number) => void;
+  readonly resolver_new: (a: any) => [number, number, number];
+  readonly resolver_resolve: (a: number, b: number, c: number) => [number, number, number];
+  readonly resolver_resolveMultiple: (a: number, b: any) => [number, number, number];
+  readonly __wbg_revocationbitmap_free: (a: number, b: number) => void;
+  readonly revocationbitmap_new: () => number;
+  readonly revocationbitmap_type: () => [number, number];
+  readonly revocationbitmap_isRevoked: (a: number, b: number) => number;
+  readonly revocationbitmap_revoke: (a: number, b: number) => number;
+  readonly revocationbitmap_unrevoke: (a: number, b: number) => number;
+  readonly revocationbitmap_len: (a: number) => [number, number, number];
+  readonly revocationbitmap_toService: (a: number, b: number) => [number, number, number];
+  readonly revocationbitmap_fromEndpoint: (a: number) => [number, number, number];
+  readonly __wbg_sdjwt_free: (a: number, b: number) => void;
+  readonly sdjwt_new: (a: number, b: number, c: any, d: number, e: number) => [number, number, number];
+  readonly sdjwt_presentation: (a: number) => [number, number];
+  readonly sdjwt_parse: (a: number, b: number) => [number, number, number];
+  readonly sdjwt_jwt: (a: number) => [number, number];
+  readonly sdjwt_disclosures: (a: number) => any;
+  readonly sdjwt_keyBindingJwt: (a: number) => [number, number];
+  readonly sdjwt_clone: (a: number) => number;
+  readonly __wbg_sha256hasher_free: (a: number, b: number) => void;
+  readonly sha256hasher_new: () => number;
+  readonly sha256hasher_algName: (a: number) => [number, number];
+  readonly sha256hasher_digest: (a: number, b: number, c: number) => [number, number];
+  readonly sha256hasher_encodedDigest: (a: number, b: number, c: number) => [number, number];
+  readonly __wbg_jwtpresentationoptions_free: (a: number, b: number) => void;
+  readonly jwtpresentationoptions_new: (a: number) => [number, number, number];
+  readonly jwtpresentationoptions_toJSON: (a: number) => [number, number, number];
+  readonly jwtpresentationoptions_fromJSON: (a: any) => [number, number, number];
+  readonly jwtpresentationoptions_clone: (a: number) => number;
+  readonly __wbg_methodtype_free: (a: number, b: number) => void;
+  readonly methodtype_Ed25519VerificationKey2018: () => number;
+  readonly methodtype_X25519KeyAgreementKey2019: () => number;
+  readonly methodtype_JsonWebKey: () => number;
+  readonly methodtype_JsonWebKey2020: () => number;
+  readonly methodtype_custom: (a: number, b: number) => number;
+  readonly methodtype_toString: (a: number) => [number, number];
+  readonly methodtype_toJSON: (a: number) => [number, number, number];
+  readonly methodtype_fromJSON: (a: any) => [number, number, number];
+  readonly methodtype_clone: (a: number) => number;
+  readonly sdjwt_toString: (a: number) => [number, number];
+  readonly __wbg_timestamp_free: (a: number, b: number) => void;
+  readonly timestamp_new: () => number;
+  readonly timestamp_parse: (a: number, b: number) => [number, number, number];
+  readonly timestamp_toRFC3339: (a: number) => [number, number];
+  readonly timestamp_checkedAdd: (a: number, b: number) => number;
+  readonly timestamp_checkedSub: (a: number, b: number) => number;
+  readonly timestamp_toJSON: (a: number) => [number, number, number];
+  readonly timestamp_fromJSON: (a: any) => [number, number, number];
+  readonly __wbg_duration_free: (a: number, b: number) => void;
+  readonly duration_seconds: (a: number) => number;
+  readonly duration_minutes: (a: number) => number;
+  readonly duration_hours: (a: number) => number;
+  readonly duration_days: (a: number) => number;
+  readonly duration_weeks: (a: number) => number;
+  readonly duration_toJSON: (a: number) => [number, number, number];
+  readonly duration_fromJSON: (a: any) => [number, number, number];
+  readonly __wbg_jwt_free: (a: number, b: number) => void;
+  readonly jwt_constructor: (a: number, b: number) => number;
+  readonly jwt_toString: (a: number) => [number, number];
+  readonly jwt_toJSON: (a: number) => [number, number, number];
+  readonly jwt_fromJSON: (a: any) => [number, number, number];
+  readonly jwt_clone: (a: number) => number;
   readonly __wbg_didjwk_free: (a: number, b: number) => void;
   readonly didjwk_new: (a: any) => [number, number, number];
   readonly didjwk_parse: (a: number, b: number) => [number, number, number];
@@ -6006,36 +6554,307 @@ export interface InitOutput {
   readonly didjwk_toJSON: (a: number) => [number, number, number];
   readonly didjwk_fromJSON: (a: any) => [number, number, number];
   readonly didjwk_clone: (a: number) => number;
-  readonly encodeB64: (a: number, b: number) => [number, number];
-  readonly decodeB64: (a: number, b: number) => [number, number, number, number];
+  readonly __wbg_coredid_free: (a: number, b: number) => void;
+  readonly coredid_parse: (a: number, b: number) => [number, number, number];
+  readonly coredid_setMethodName: (a: number, b: number, c: number) => [number, number];
+  readonly coredid_validMethodName: (a: number, b: number) => number;
+  readonly coredid_setMethodId: (a: number, b: number, c: number) => [number, number];
+  readonly coredid_validMethodId: (a: number, b: number) => number;
+  readonly coredid_scheme: (a: number) => [number, number];
+  readonly coredid_authority: (a: number) => [number, number];
+  readonly coredid_method: (a: number) => [number, number];
+  readonly coredid_methodId: (a: number) => [number, number];
+  readonly coredid_join: (a: number, b: number, c: number) => [number, number, number];
+  readonly coredid_toUrl: (a: number) => number;
+  readonly coredid_intoUrl: (a: number) => number;
+  readonly coredid_toString: (a: number) => [number, number];
+  readonly coredid_toJSON: (a: number) => [number, number, number];
+  readonly coredid_fromJSON: (a: any) => [number, number, number];
+  readonly coredid_clone: (a: number) => number;
+  readonly __wbg_iotadid_free: (a: number, b: number) => void;
+  readonly iotadid_static_default_network: () => [number, number];
+  readonly iotadid_new: (a: number, b: number, c: number, d: number) => [number, number, number];
+  readonly iotadid_fromAliasId: (a: number, b: number, c: number, d: number) => [number, number, number];
+  readonly iotadid_placeholder: (a: number, b: number) => [number, number, number];
+  readonly iotadid_parse: (a: number, b: number) => [number, number, number];
+  readonly iotadid_network: (a: number) => [number, number];
+  readonly iotadid_tag: (a: number) => [number, number];
+  readonly iotadid_toCoreDid: (a: number) => number;
+  readonly iotadid_scheme: (a: number) => [number, number];
+  readonly iotadid_authority: (a: number) => [number, number];
+  readonly iotadid_method: (a: number) => [number, number];
+  readonly iotadid_methodId: (a: number) => [number, number];
+  readonly iotadid_join: (a: number, b: number, c: number) => [number, number, number];
+  readonly iotadid_toUrl: (a: number) => number;
+  readonly iotadid_toAliasId: (a: number) => [number, number];
+  readonly iotadid_intoUrl: (a: number) => number;
+  readonly iotadid_toJSON: (a: number) => [number, number, number];
+  readonly iotadid_fromJSON: (a: any) => [number, number, number];
+  readonly iotadid_clone: (a: number) => number;
+  readonly __wbg_issuerprotectedheader_free: (a: number, b: number) => void;
+  readonly __wbg_get_issuerprotectedheader_typ: (a: number) => [number, number];
+  readonly __wbg_set_issuerprotectedheader_typ: (a: number, b: number, c: number) => void;
+  readonly __wbg_get_issuerprotectedheader_alg: (a: number) => number;
+  readonly __wbg_set_issuerprotectedheader_alg: (a: number, b: number) => void;
+  readonly __wbg_get_issuerprotectedheader_kid: (a: number) => [number, number];
+  readonly __wbg_set_issuerprotectedheader_kid: (a: number, b: number, c: number) => void;
+  readonly __wbg_get_issuerprotectedheader_cid: (a: number) => [number, number];
+  readonly __wbg_set_issuerprotectedheader_cid: (a: number, b: number, c: number) => void;
+  readonly issuerprotectedheader_claims: (a: number) => [number, number];
+  readonly __wbg_jwpissued_free: (a: number, b: number) => void;
+  readonly jwpissued_toJSON: (a: number) => [number, number, number];
+  readonly jwpissued_fromJSON: (a: any) => [number, number, number];
+  readonly jwpissued_clone: (a: number) => number;
+  readonly jwpissued_encode: (a: number, b: number) => [number, number, number, number];
+  readonly jwpissued_setProof: (a: number, b: number, c: number) => void;
+  readonly jwpissued_getProof: (a: number) => [number, number];
+  readonly jwpissued_getPayloads: (a: number) => number;
+  readonly jwpissued_setPayloads: (a: number, b: number) => void;
+  readonly jwpissued_getIssuerProtectedHeader: (a: number) => number;
+  readonly __wbg_selectivedisclosurepresentation_free: (a: number, b: number) => void;
+  readonly selectivedisclosurepresentation_new: (a: number) => number;
+  readonly selectivedisclosurepresentation_concealInSubject: (a: number, b: number, c: number) => [number, number];
+  readonly selectivedisclosurepresentation_concealInEvidence: (a: number, b: number, c: number) => [number, number];
+  readonly selectivedisclosurepresentation_setPresentationHeader: (a: number, b: number) => void;
+  readonly __wbg_sdobjectdecoder_free: (a: number, b: number) => void;
+  readonly sdobjectdecoder_new: () => number;
+  readonly sdobjectdecoder_decode: (a: number, b: any, c: any) => [number, number, number];
+  readonly __wbg_sdobjectencoder_free: (a: number, b: number) => void;
+  readonly sdobjectencoder_new: (a: any) => [number, number, number];
+  readonly sdobjectencoder_conceal: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+  readonly sdobjectencoder_addSdAlgProperty: (a: number) => void;
+  readonly sdobjectencoder_encodeToString: (a: number) => [number, number, number, number];
+  readonly sdobjectencoder_encodeToObject: (a: number) => [number, number, number];
+  readonly sdobjectencoder_toJSON: (a: number) => [number, number, number];
+  readonly sdobjectencoder_addDecoys: (a: number, b: number, c: number, d: number) => [number, number];
+  readonly __wbg_keybindingjwtclaims_free: (a: number, b: number) => void;
+  readonly keybindingjwtclaims_new: (a: number, b: number, c: any, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number, number];
+  readonly keybindingjwtclaims_toString: (a: number) => [number, number, number, number];
+  readonly keybindingjwtclaims_iat: (a: number) => bigint;
+  readonly keybindingjwtclaims_aud: (a: number) => [number, number];
+  readonly keybindingjwtclaims_nonce: (a: number) => [number, number];
+  readonly keybindingjwtclaims_sdHash: (a: number) => [number, number];
+  readonly keybindingjwtclaims_customProperties: (a: number) => [number, number, number];
+  readonly keybindingjwtclaims_keyBindingJwtHeaderTyp: () => [number, number];
+  readonly keybindingjwtclaims_toJSON: (a: number) => [number, number, number];
+  readonly keybindingjwtclaims_fromJSON: (a: any) => [number, number, number];
+  readonly keybindingjwtclaims_clone: (a: number) => number;
+  readonly __wbg_methoddigest_free: (a: number, b: number) => void;
+  readonly methoddigest_new: (a: number) => [number, number, number];
+  readonly methoddigest_pack: (a: number) => any;
+  readonly methoddigest_unpack: (a: any) => [number, number, number];
+  readonly methoddigest_clone: (a: number) => number;
+  readonly __wbg_methodscope_free: (a: number, b: number) => void;
+  readonly methodscope_VerificationMethod: () => number;
+  readonly methodscope_Authentication: () => number;
+  readonly methodscope_AssertionMethod: () => number;
+  readonly methodscope_KeyAgreement: () => number;
+  readonly methodscope_CapabilityDelegation: () => number;
+  readonly methodscope_CapabilityInvocation: () => number;
+  readonly methodscope_toString: (a: number) => [number, number];
+  readonly methodscope_toJSON: (a: number) => [number, number, number];
+  readonly methodscope_fromJSON: (a: any) => [number, number, number];
+  readonly methodscope_clone: (a: number) => number;
+  readonly __wbg_controllertoken_free: (a: number, b: number) => void;
+  readonly controllertoken_fromControllerCap: (a: number) => number;
+  readonly controllertoken_fromDelegationToken: (a: number) => number;
+  readonly controllertoken_id: (a: number) => [number, number];
+  readonly controllertoken_controllerOf: (a: number) => [number, number];
+  readonly controllertoken_toControllerCap: (a: number) => number;
+  readonly controllertoken_toDelegationToken: (a: number) => number;
+  readonly controllertoken_getById: (a: number, b: number, c: any) => any;
+  readonly __wbg_controllercap_free: (a: number, b: number) => void;
+  readonly controllercap_id: (a: number) => [number, number];
+  readonly controllercap_controllerOf: (a: number) => [number, number];
+  readonly controllercap_canDelegate: (a: number) => number;
+  readonly controllercap_delegate: (a: number, b: number, c: number, d: number) => [number, number, number];
+  readonly __wbg_delegationtoken_free: (a: number, b: number) => void;
+  readonly delegationtoken_id: (a: number) => [number, number];
+  readonly delegationtoken_controller: (a: number) => [number, number];
+  readonly delegationtoken_controllerOf: (a: number) => [number, number];
+  readonly delegationtoken_permissions: (a: number) => number;
+  readonly __wbg_delegatetoken_free: (a: number, b: number) => void;
+  readonly delegatetoken_new: (a: number, b: number, c: number, d: number) => [number, number, number];
+  readonly delegatetoken_buildProgrammableTransaction: (a: number, b: number) => any;
+  readonly delegatetoken_apply: (a: number, b: any, c: number) => any;
+  readonly __wbg_delegationtokenrevocation_free: (a: number, b: number) => void;
+  readonly delegationtokenrevocation_new: (a: number, b: number, c: number, d: number) => [number, number, number];
+  readonly delegationtokenrevocation_isRevocation: (a: number) => number;
+  readonly delegationtokenrevocation_tokenId: (a: number) => [number, number];
+  readonly delegationtokenrevocation_buildProgrammableTransaction: (a: number, b: number) => any;
+  readonly delegationtokenrevocation_apply: (a: number, b: any, c: number) => any;
+  readonly __wbg_deletedelegationtoken_free: (a: number, b: number) => void;
+  readonly deletedelegationtoken_new: (a: number, b: number) => [number, number, number];
+  readonly deletedelegationtoken_tokenId: (a: number) => [number, number];
+  readonly deletedelegationtoken_buildProgrammableTransaction: (a: number, b: number) => any;
+  readonly deletedelegationtoken_apply: (a: number, b: any, c: number) => any;
+  readonly __wbg_iotatransactionblockresponseessence_free: (a: number, b: number) => void;
+  readonly __wbg_get_iotatransactionblockresponseessence_effectsExist: (a: number) => number;
+  readonly __wbg_set_iotatransactionblockresponseessence_effectsExist: (a: number, b: number) => void;
+  readonly __wbg_get_iotatransactionblockresponseessence_effects: (a: number) => [number, number];
+  readonly __wbg_set_iotatransactionblockresponseessence_effects: (a: number, b: number, c: number) => void;
+  readonly __wbg_get_iotatransactionblockresponseessence_effectsExecutionStatus: (a: number) => any;
+  readonly __wbg_set_iotatransactionblockresponseessence_effectsExecutionStatus: (a: number, b: number) => void;
+  readonly __wbg_get_iotatransactionblockresponseessence_effectsCreated: (a: number) => [number, number];
+  readonly __wbg_set_iotatransactionblockresponseessence_effectsCreated: (a: number, b: number, c: number) => void;
+  readonly __wbg_identityclient_free: (a: number, b: number) => void;
+  readonly identityclient__new: () => [number, number, number];
+  readonly identityclient_create: (a: number, b: any) => any;
+  readonly identityclient_senderPublicKey: (a: number) => [number, number, number];
+  readonly identityclient_senderAddress: (a: number) => [number, number];
+  readonly identityclient_network: (a: number) => [number, number];
+  readonly identityclient_createIdentity: (a: number, b: number) => [number, number, number];
+  readonly identityclient_getIdentity: (a: number, b: number, c: number) => any;
+  readonly identityclient_packageId: (a: number) => [number, number];
+  readonly identityclient_packageHistory: (a: number) => [number, number];
+  readonly identityclient_resolveDid: (a: number, b: number) => any;
+  readonly identityclient_publishDidDocument: (a: number, b: number, c: number, d: number) => [number, number, number];
+  readonly identityclient_publishDidDocumentUpdate: (a: number, b: number, c: bigint) => any;
+  readonly identityclient_deactivateDidOutput: (a: number, b: number, c: bigint) => any;
+  readonly identityclient_iotaClient: (a: number) => any;
+  readonly identityclient_signer: (a: number) => any;
+  readonly identityclient_readOnly: (a: number) => number;
+  readonly __wbg_transactionoutputinternaliotadocument_free: (a: number, b: number) => void;
+  readonly transactionoutputinternaliotadocument_output: (a: number) => number;
+  readonly transactionoutputinternaliotadocument_response: (a: number) => any;
+  readonly __wbg_publishdiddocument_free: (a: number, b: number) => void;
+  readonly publishdiddocument_new: (a: number, b: number, c: number) => [number, number, number];
+  readonly publishdiddocument_buildProgrammableTransaction: (a: number, b: any) => any;
+  readonly publishdiddocument_apply: (a: number, b: any, c: any) => any;
+  readonly __wbg_identity_free: (a: number, b: number) => void;
+  readonly identity_toFullFledged: (a: number) => number;
+  readonly __wbg_identityclientreadonly_free: (a: number, b: number) => void;
+  readonly identityclientreadonly__new: () => [number, number, number];
+  readonly identityclientreadonly_create: (a: any) => any;
+  readonly identityclientreadonly_createWithPkgId: (a: any, b: number, c: number) => any;
+  readonly identityclientreadonly_packageId: (a: number) => [number, number];
+  readonly identityclientreadonly_packageHistory: (a: number) => [number, number];
+  readonly identityclientreadonly_iotaClient: (a: number) => any;
+  readonly identityclientreadonly_network: (a: number) => [number, number];
+  readonly identityclientreadonly_resolveDid: (a: number, b: number) => any;
+  readonly identityclientreadonly_getIdentity: (a: number, b: number, c: number) => any;
+  readonly coredid_toCoreDid: (a: number) => number;
+  readonly sdobjectencoder_toString: (a: number) => [number, number, number, number];
+  readonly iotadid_toString: (a: number) => [number, number];
+  readonly timestamp_nowUTC: () => number;
+  readonly iotadid_static_method: () => [number, number];
+  readonly __wbg_jptcredentialvalidationoptions_free: (a: number, b: number) => void;
+  readonly jptcredentialvalidationoptions_clone: (a: number) => number;
+  readonly jptcredentialvalidationoptions_toJSON: (a: number) => [number, number, number];
+  readonly jptcredentialvalidationoptions_fromJSON: (a: any) => [number, number, number];
+  readonly jptcredentialvalidationoptions_new: (a: number) => [number, number, number];
+  readonly __wbg_jwpverificationoptions_free: (a: number, b: number) => void;
+  readonly jwpverificationoptions_clone: (a: number) => number;
+  readonly jwpverificationoptions_toJSON: (a: number) => [number, number, number];
+  readonly jwpverificationoptions_fromJSON: (a: any) => [number, number, number];
+  readonly jwpverificationoptions_new: (a: number) => [number, number, number];
+  readonly __wbg_iotadocumentmetadata_free: (a: number, b: number) => void;
+  readonly iotadocumentmetadata_created: (a: number) => number;
+  readonly iotadocumentmetadata_updated: (a: number) => number;
+  readonly iotadocumentmetadata_deactivated: (a: number) => number;
+  readonly iotadocumentmetadata_properties: (a: number) => [number, number, number];
+  readonly iotadocumentmetadata_toJSON: (a: number) => [number, number, number];
+  readonly iotadocumentmetadata_fromJSON: (a: any) => [number, number, number];
+  readonly iotadocumentmetadata_clone: (a: number) => number;
+  readonly __wbg_typemetadata_free: (a: number, b: number) => void;
+  readonly typemetadata_toJSON: (a: number) => [number, number, number];
+  readonly typemetadata_fromJSON: (a: any) => [number, number, number];
+  readonly typemetadata_new: (a: any) => [number, number, number];
+  readonly typemetadata_intoInner: (a: number) => [number, number, number];
+  readonly typemetadata_validateCredential: (a: number, b: any) => [number, number];
+  readonly typemetadata_validateCredentialWithResolver: (a: number, b: any, c: any) => any;
+  readonly __wbg_jpt_free: (a: number, b: number) => void;
+  readonly jpt_new: (a: number, b: number) => number;
+  readonly jpt_toString: (a: number) => [number, number];
+  readonly jpt_clone: (a: number) => number;
+  readonly __wbg_jws_free: (a: number, b: number) => void;
+  readonly jws_constructor: (a: number, b: number) => number;
+  readonly jws_toString: (a: number) => [number, number];
+  readonly __wbg_statuslist2021entry_free: (a: number, b: number) => void;
+  readonly statuslist2021entry_new: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+  readonly statuslist2021entry_id: (a: number) => [number, number];
+  readonly statuslist2021entry_purpose: (a: number) => number;
+  readonly statuslist2021entry_index: (a: number) => number;
+  readonly statuslist2021entry_statusListCredential: (a: number) => [number, number];
+  readonly statuslist2021entry_toStatus: (a: number) => [number, number, number];
+  readonly statuslist2021entry_clone: (a: number) => number;
+  readonly statuslist2021entry_toJSON: (a: number) => [number, number, number];
+  readonly statuslist2021entry_fromJSON: (a: any) => [number, number, number];
+  readonly __wbg_jwk_free: (a: number, b: number) => void;
+  readonly jwk_new: (a: any) => number;
+  readonly jwk_kty: (a: number) => any;
+  readonly jwk_use: (a: number) => any;
+  readonly jwk_keyOps: (a: number) => any;
+  readonly jwk_alg: (a: number) => any;
+  readonly jwk_kid: (a: number) => [number, number];
+  readonly jwk_setKid: (a: number, b: number, c: number) => void;
+  readonly jwk_x5u: (a: number) => [number, number];
+  readonly jwk_x5c: (a: number) => any;
+  readonly jwk_x5t: (a: number) => [number, number];
+  readonly jwk_x5t256: (a: number) => [number, number];
+  readonly jwk_paramsEc: (a: number) => [number, number, number];
+  readonly jwk_paramsOkp: (a: number) => [number, number, number];
+  readonly jwk_paramsOct: (a: number) => [number, number, number];
+  readonly jwk_paramsRsa: (a: number) => [number, number, number];
+  readonly jwk_thumbprintSha256B64: (a: number) => [number, number];
+  readonly jwk_toPublic: (a: number) => number;
+  readonly jwk_isPublic: (a: number) => number;
+  readonly jwk_isPrivate: (a: number) => number;
+  readonly jwk_toJSON: (a: number) => [number, number, number];
+  readonly jwk_fromJSON: (a: any) => [number, number, number];
+  readonly jwk_clone: (a: number) => number;
   readonly __wbg_presentationprotectedheader_free: (a: number, b: number) => void;
   readonly __wbg_get_presentationprotectedheader_alg: (a: number) => number;
   readonly __wbg_set_presentationprotectedheader_alg: (a: number, b: number) => void;
-  readonly __wbg_get_presentationprotectedheader_nonce: (a: number) => [number, number];
-  readonly __wbg_set_presentationprotectedheader_nonce: (a: number, b: number, c: number) => void;
-  readonly __wbg_resolver_free: (a: number, b: number) => void;
-  readonly resolver_new: (a: any) => [number, number, number];
-  readonly resolver_resolve: (a: number, b: number, c: number) => [number, number, number];
-  readonly resolver_resolveMultiple: (a: number, b: any) => [number, number, number];
-  readonly __wbg_sdjwt_free: (a: number, b: number) => void;
-  readonly sdjwt_new: (a: number, b: number, c: any, d: number, e: number) => [number, number, number];
-  readonly sdjwt_presentation: (a: number) => [number, number];
-  readonly sdjwt_parse: (a: number, b: number) => [number, number, number];
-  readonly sdjwt_jwt: (a: number) => [number, number];
-  readonly sdjwt_disclosures: (a: number) => any;
-  readonly sdjwt_keyBindingJwt: (a: number) => [number, number];
-  readonly sdjwt_clone: (a: number) => number;
-  readonly __wbg_issuermetadata_free: (a: number, b: number) => void;
-  readonly issuermetadata_new: (a: number, b: number, c: any) => [number, number, number];
-  readonly issuermetadata_issuer: (a: number) => [number, number];
-  readonly issuermetadata_jwks: (a: number) => [number, number, number];
-  readonly issuermetadata_validate: (a: number, b: number) => [number, number];
-  readonly issuermetadata_toJSON: (a: number) => [number, number, number];
-  readonly __wbg_sha256hasher_free: (a: number, b: number) => void;
-  readonly sha256hasher_new: () => number;
-  readonly sha256hasher_algName: (a: number) => [number, number];
-  readonly sha256hasher_digest: (a: number, b: number, c: number) => [number, number];
-  readonly sha256hasher_encodedDigest: (a: number, b: number, c: number) => [number, number];
+  readonly __wbg_get_presentationprotectedheader_kid: (a: number) => [number, number];
+  readonly __wbg_set_presentationprotectedheader_kid: (a: number, b: number, c: number) => void;
+  readonly __wbg_get_presentationprotectedheader_aud: (a: number) => [number, number];
+  readonly __wbg_set_presentationprotectedheader_aud: (a: number, b: number, c: number) => void;
+  readonly __wbg_sdjwtvcbuilder_free: (a: number, b: number) => void;
+  readonly sdjwtvcbuilder_new: (a: any, b: any) => [number, number, number];
+  readonly sdjwtvcbuilder_fromCredential: (a: number, b: any) => [number, number, number];
+  readonly sdjwtvcbuilder_makeConcealable: (a: number, b: number, c: number) => [number, number, number];
+  readonly sdjwtvcbuilder_header: (a: number, b: any) => number;
+  readonly sdjwtvcbuilder_addDecoys: (a: number, b: number, c: number, d: number) => [number, number, number];
+  readonly sdjwtvcbuilder_requireKeyBinding: (a: number, b: any) => [number, number, number];
+  readonly sdjwtvcbuilder_iss: (a: number, b: number, c: number) => [number, number, number];
+  readonly sdjwtvcbuilder_nbf: (a: number, b: number) => number;
+  readonly sdjwtvcbuilder_exp: (a: number, b: number) => number;
+  readonly sdjwtvcbuilder_iat: (a: number, b: number) => number;
+  readonly sdjwtvcbuilder_vct: (a: number, b: number, c: number) => number;
+  readonly sdjwtvcbuilder_sub: (a: number, b: number, c: number) => number;
+  readonly sdjwtvcbuilder_status: (a: number, b: any) => [number, number, number];
+  readonly sdjwtvcbuilder_finish: (a: number, b: any, c: number, d: number) => any;
+  readonly __wbg_claimmetadata_free: (a: number, b: number) => void;
+  readonly __wbg_get_claimmetadata_path: (a: number) => any;
+  readonly __wbg_set_claimmetadata_path: (a: number, b: any) => void;
+  readonly __wbg_get_claimmetadata_display: (a: number) => [number, number];
+  readonly __wbg_set_claimmetadata_display: (a: number, b: number, c: number) => void;
+  readonly __wbg_get_claimmetadata_sd: (a: number) => any;
+  readonly __wbg_set_claimmetadata_sd: (a: number, b: number) => void;
+  readonly __wbg_get_claimmetadata_svg_id: (a: number) => [number, number];
+  readonly __wbg_set_claimmetadata_svg_id: (a: number, b: number, c: number) => void;
+  readonly __wbg_claimdisplay_free: (a: number, b: number) => void;
+  readonly __wbg_get_claimdisplay_lang: (a: number) => [number, number];
+  readonly __wbg_set_claimdisplay_lang: (a: number, b: number, c: number) => void;
+  readonly __wbg_get_claimdisplay_label: (a: number) => [number, number];
+  readonly __wbg_set_claimdisplay_label: (a: number, b: number, c: number) => void;
+  readonly __wbg_get_claimdisplay_description: (a: number) => [number, number];
+  readonly __wbg_set_claimdisplay_description: (a: number, b: number, c: number) => void;
+  readonly __wbg_sdjwtbuilder_free: (a: number, b: number) => void;
+  readonly sdjwtbuilder_new: (a: any, b: any, c: number) => [number, number, number];
+  readonly sdjwtbuilder_makeConcealable: (a: number, b: number, c: number) => [number, number, number];
+  readonly sdjwtbuilder_header: (a: number, b: any) => number;
+  readonly sdjwtbuilder_insertClaim: (a: number, b: number, c: number, d: any) => [number, number, number];
+  readonly sdjwtbuilder_addDecoys: (a: number, b: number, c: number, d: number) => [number, number, number];
+  readonly sdjwtbuilder_requireKeyBinding: (a: number, b: any) => [number, number, number];
+  readonly sdjwtbuilder_finish: (a: number, b: any, c: number, d: number) => any;
+  readonly __wbg_disclosurev2_free: (a: number, b: number) => void;
+  readonly __wbg_get_disclosurev2_salt: (a: number) => [number, number];
+  readonly __wbg_get_disclosurev2_claimValue: (a: number) => any;
+  readonly __wbg_set_disclosurev2_claimValue: (a: number, b: any) => void;
+  readonly disclosurev2_parse: (a: number, b: number) => [number, number, number];
+  readonly disclosurev2_toString: (a: number) => [number, number];
   readonly __wbg_keybindingjwt_free: (a: number, b: number) => void;
   readonly keybindingjwt_parse: (a: number, b: number) => [number, number, number];
   readonly keybindingjwt_claims: (a: number) => any;
@@ -6050,46 +6869,80 @@ export interface InitOutput {
   readonly keybindingjwtbuilder_nonce: (a: number, b: number, c: number) => number;
   readonly keybindingjwtbuilder_insertProperty: (a: number, b: number, c: number, d: any) => [number, number, number];
   readonly keybindingjwtbuilder_finish: (a: number, b: number, c: number, d: number, e: any) => any;
-  readonly __wbg_methodtype_free: (a: number, b: number) => void;
-  readonly methodtype_Ed25519VerificationKey2018: () => number;
-  readonly methodtype_X25519KeyAgreementKey2019: () => number;
-  readonly methodtype_JsonWebKey: () => number;
-  readonly methodtype_JsonWebKey2020: () => number;
-  readonly methodtype_custom: (a: number, b: number) => number;
-  readonly methodtype_toString: (a: number) => [number, number];
-  readonly methodtype_toJSON: (a: number) => [number, number, number];
-  readonly methodtype_fromJSON: (a: any) => [number, number, number];
-  readonly methodtype_clone: (a: number) => number;
-  readonly __wbg_get_presentationprotectedheader_kid: (a: number) => [number, number];
-  readonly __wbg_get_presentationprotectedheader_aud: (a: number) => [number, number];
-  readonly sdjwt_toString: (a: number) => [number, number];
-  readonly __wbg_set_presentationprotectedheader_kid: (a: number, b: number, c: number) => void;
-  readonly __wbg_set_presentationprotectedheader_aud: (a: number, b: number, c: number) => void;
-  readonly __wbg_jptcredentialvalidationoptions_free: (a: number, b: number) => void;
-  readonly jptcredentialvalidationoptions_clone: (a: number) => number;
-  readonly jptcredentialvalidationoptions_toJSON: (a: number) => [number, number, number];
-  readonly jptcredentialvalidationoptions_fromJSON: (a: any) => [number, number, number];
-  readonly jptcredentialvalidationoptions_new: (a: number) => [number, number, number];
-  readonly __wbg_jwpverificationoptions_free: (a: number, b: number) => void;
-  readonly jwpverificationoptions_clone: (a: number) => number;
-  readonly jwpverificationoptions_toJSON: (a: number) => [number, number, number];
-  readonly jwpverificationoptions_fromJSON: (a: any) => [number, number, number];
-  readonly jwpverificationoptions_new: (a: number) => [number, number, number];
-  readonly __wbg_jptpresentationvalidationoptions_free: (a: number, b: number) => void;
-  readonly jptpresentationvalidationoptions_clone: (a: number) => number;
-  readonly jptpresentationvalidationoptions_toJSON: (a: number) => [number, number, number];
-  readonly jptpresentationvalidationoptions_fromJSON: (a: any) => [number, number, number];
-  readonly jptpresentationvalidationoptions_new: (a: number) => [number, number, number];
-  readonly __wbg_jwpissued_free: (a: number, b: number) => void;
-  readonly jwpissued_toJSON: (a: number) => [number, number, number];
-  readonly jwpissued_fromJSON: (a: any) => [number, number, number];
-  readonly jwpissued_clone: (a: number) => number;
-  readonly jwpissued_encode: (a: number, b: number) => [number, number, number, number];
-  readonly jwpissued_setProof: (a: number, b: number, c: number) => void;
-  readonly jwpissued_getProof: (a: number) => [number, number];
-  readonly jwpissued_getPayloads: (a: number) => number;
-  readonly jwpissued_setPayloads: (a: number, b: number) => void;
-  readonly jwpissued_getIssuerProtectedHeader: (a: number) => number;
+  readonly __wbg_proofupdatectx_free: (a: number, b: number) => void;
+  readonly __wbg_get_proofupdatectx_old_start_validity_timeframe: (a: number) => [number, number];
+  readonly __wbg_get_proofupdatectx_new_start_validity_timeframe: (a: number) => [number, number];
+  readonly __wbg_get_proofupdatectx_old_end_validity_timeframe: (a: number) => [number, number];
+  readonly __wbg_set_proofupdatectx_old_end_validity_timeframe: (a: number, b: number, c: number) => void;
+  readonly __wbg_get_proofupdatectx_new_end_validity_timeframe: (a: number) => [number, number];
+  readonly __wbg_set_proofupdatectx_new_end_validity_timeframe: (a: number, b: number, c: number) => void;
+  readonly __wbg_get_proofupdatectx_index_start_validity_timeframe: (a: number) => number;
+  readonly __wbg_set_proofupdatectx_index_start_validity_timeframe: (a: number, b: number) => void;
+  readonly __wbg_get_proofupdatectx_index_end_validity_timeframe: (a: number) => number;
+  readonly __wbg_set_proofupdatectx_index_end_validity_timeframe: (a: number, b: number) => void;
+  readonly __wbg_get_proofupdatectx_number_of_signed_messages: (a: number) => number;
+  readonly __wbg_set_proofupdatectx_number_of_signed_messages: (a: number, b: number) => void;
+  readonly __wbg_storage_free: (a: number, b: number) => void;
+  readonly storage_new: (a: any, b: any) => number;
+  readonly storage_keyIdStorage: (a: number) => any;
+  readonly storage_keyStorage: (a: number) => any;
+  readonly __wbg_storagesigner_free: (a: number, b: number) => void;
+  readonly storagesigner_new: (a: number, b: number, c: number, d: number) => number;
+  readonly storagesigner_keyId: (a: number) => [number, number];
+  readonly storagesigner_sign: (a: number, b: number, c: number) => any;
+  readonly storagesigner_publicKey: (a: number) => any;
+  readonly storagesigner_iotaPublicKeyBytes: (a: number) => any;
+  readonly __wbg_set_disclosurev2_salt: (a: number, b: number, c: number) => void;
+  readonly __wbg_set_proofupdatectx_old_start_validity_timeframe: (a: number, b: number, c: number) => void;
+  readonly __wbg_set_proofupdatectx_new_start_validity_timeframe: (a: number, b: number, c: number) => void;
+  readonly __wbg_set_presentationprotectedheader_nonce: (a: number, b: number, c: number) => void;
+  readonly __wbg_set_disclosurev2_claimName: (a: number, b: number, c: number) => void;
+  readonly __wbg_get_presentationprotectedheader_nonce: (a: number) => [number, number];
+  readonly __wbg_get_disclosurev2_claimName: (a: number) => [number, number];
+  readonly __wbg_defaulthttpclient_free: (a: number, b: number) => void;
+  readonly defaulthttpclient_new: () => number;
+  readonly defaulthttpclient_send: (a: number, b: any) => any;
+  readonly __wbg_gasstationparams_free: (a: number, b: number) => void;
+  readonly gasstationparams_new: (a: number) => [number, number, number];
+  readonly gasstationparams_withAuthToken: (a: number, b: number, c: number) => number;
+  readonly gasstationparams_gasReservationDuration: (a: number) => bigint;
+  readonly gasstationparams_headers: (a: number) => [number, number, number];
+  readonly transactionbuilder_executeWithGasStation: (a: number, b: any, c: number, d: number, e: any, f: number) => any;
+  readonly __wbg_transactionbuilder_free: (a: number, b: number) => void;
+  readonly transactionbuilder_new: (a: any) => number;
+  readonly transactionbuilder_transaction: (a: number) => any;
+  readonly transactionbuilder_withGasPrice: (a: number, b: bigint) => number;
+  readonly transactionbuilder_withGasBudget: (a: number, b: bigint) => number;
+  readonly transactionbuilder_withGasOwner: (a: number, b: number, c: number) => [number, number, number];
+  readonly transactionbuilder_withGasPayment: (a: number, b: number, c: number) => [number, number, number];
+  readonly transactionbuilder_withSender: (a: number, b: number, c: number) => [number, number, number];
+  readonly transactionbuilder_withSignature: (a: number, b: any) => any;
+  readonly transactionbuilder_withSponsor: (a: number, b: any, c: any) => any;
+  readonly transactionbuilder_build: (a: number, b: any) => any;
+  readonly transactionbuilder_build_with_defaults: (a: number, b: any) => any;
+  readonly transactionbuilder_buildAndExecute: (a: number, b: any) => any;
+  readonly __wbg_transactionoutput_free: (a: number, b: number) => void;
+  readonly __wbg_get_transactionoutput_output: (a: number) => any;
+  readonly __wbg_set_transactionoutput_output: (a: number, b: any) => void;
+  readonly __wbg_get_transactionoutput_response: (a: number) => any;
+  readonly __wbg_set_transactionoutput_response: (a: number, b: any) => void;
+  readonly __wbg_wasmmanagedcoreclientreadonly_free: (a: number, b: number) => void;
+  readonly wasmmanagedcoreclientreadonly_packageId: (a: number) => [number, number];
+  readonly wasmmanagedcoreclientreadonly_packageHistory: (a: number) => [number, number];
+  readonly wasmmanagedcoreclientreadonly_network: (a: number) => [number, number];
+  readonly wasmmanagedcoreclientreadonly_iotaClient: (a: number) => any;
+  readonly __wbg_wasmmanagedcoreclient_free: (a: number, b: number) => void;
+  readonly wasmmanagedcoreclient_packageId: (a: number) => [number, number];
+  readonly wasmmanagedcoreclient_packageHistory: (a: number) => [number, number];
+  readonly wasmmanagedcoreclient_network: (a: number) => [number, number];
+  readonly wasmmanagedcoreclient_iotaClient: (a: number) => any;
+  readonly wasmmanagedcoreclient_signer: (a: number) => any;
+  readonly wasmmanagedcoreclient_senderAddress: (a: number) => [number, number];
+  readonly wasmmanagedcoreclient_senderPublicKey: (a: number) => [number, number, number];
+  readonly rustsecp256k1_v0_8_1_context_create: (a: number) => number;
+  readonly rustsecp256k1_v0_8_1_context_destroy: (a: number) => void;
+  readonly rustsecp256k1_v0_8_1_default_illegal_callback_fn: (a: number, b: number) => void;
+  readonly rustsecp256k1_v0_8_1_default_error_callback_fn: (a: number, b: number) => void;
   readonly __wbindgen_malloc: (a: number, b: number) => number;
   readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
   readonly __wbindgen_exn_store: (a: number) => void;
@@ -6099,8 +6952,9 @@ export interface InitOutput {
   readonly __wbindgen_export_6: WebAssembly.Table;
   readonly __externref_table_dealloc: (a: number) => void;
   readonly __externref_drop_slice: (a: number, b: number) => void;
-  readonly closure757_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure3245_externref_shim: (a: number, b: number, c: any, d: any) => void;
+  readonly wasm_bindgen__convert__closures_____invoke__h4ad227bb815299b9: (a: number, b: number) => void;
+  readonly closure4453_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure4665_externref_shim: (a: number, b: number, c: any, d: any) => void;
   readonly __wbindgen_start: () => void;
 }
 

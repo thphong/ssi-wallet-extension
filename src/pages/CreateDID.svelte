@@ -12,7 +12,7 @@
 
     let dataInput: UserInput = {
         name: "",
-        didType: "web",
+        didType: "blockchain",
         didWeb: "",
     };
     let password = "";

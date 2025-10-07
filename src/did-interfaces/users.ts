@@ -7,13 +7,12 @@ import {
     didWeb,
     didIOTA,
     type DidDocument,
-    jwkToArrayBuffer,
-    generateMnemonic
+    jwkToArrayBuffer
 } from "did-core-sdk";
 import { IndexedDb } from "../libs/indexed-db";
 import { setSession } from "./session";
 import { writable } from 'svelte/store';
-import { savePrivateKey, saveMnemonic } from "./encrypt";
+import { savePrivateKey } from "./encrypt";
 
 const dbInstance: IndexedDb = IndexedDb.getInstance();
 const KEY_LIST_USER = 'user:list-users';
@@ -40,7 +39,6 @@ export async function createUser(user: UserInput, password: string): Promise<Use
     const keyPair = await createKeyPair();
 
     let did: string, doc: DidDocument;
-    let mnemonic = "";
     switch (user.didType) {
         case "key":
             ({ did, doc } = await didKey.create(keyPair.publicKeyJwk));
@@ -52,8 +50,7 @@ export async function createUser(user: UserInput, password: string): Promise<Use
             ));
             break;
         case "blockchain":
-            mnemonic = await generateMnemonic();
-            ({ did, doc } = await didIOTA.create(keyPair.publicKeyJwk, { mnemonic }));
+            ({ did, doc } = await didIOTA.create(keyPair.publicKeyJwk, { privateKey: keyPair.privateKeyJwk }));
             break;
         default:
             throw new Error("Not supported did type");
@@ -69,9 +66,6 @@ export async function createUser(user: UserInput, password: string): Promise<Use
     if (keyPair.privateKeyJwk) {
         const pkArray = await jwkToArrayBuffer(keyPair.privateKeyJwk);
         await savePrivateKey(did, password, pkArray);
-    }
-    if (mnemonic) {
-        await saveMnemonic(did, password, mnemonic);
     }
     await addUser(userInfo);
     await setCurrentUser(userInfo);

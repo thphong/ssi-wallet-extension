@@ -1,6 +1,10 @@
-let wasm;
+import { WasmIotaTransactionBlockResponseWrapper } from '@iota/iota-interaction-ts/web/iota_client_helpers';
+import { Ed25519PublicKey } from '@iota/iota-sdk/keypairs/ed25519';
+import { Secp256k1PublicKey } from '@iota/iota-sdk/keypairs/secp256k1';
+import { Secp256r1PublicKey } from '@iota/iota-sdk/keypairs/secp256r1';
+import { TransactionDataBuilder } from '@iota/iota-sdk/transactions';
 
-let WASM_VECTOR_LEN = 0;
+let wasm;
 
 let cachedUint8ArrayMemory0 = null;
 
@@ -10,6 +14,29 @@ function getUint8ArrayMemory0() {
     }
     return cachedUint8ArrayMemory0;
 }
+
+let cachedTextDecoder = (typeof TextDecoder !== 'undefined' ? new TextDecoder('utf-8', { ignoreBOM: true, fatal: true }) : { decode: () => { throw Error('TextDecoder not available') } } );
+
+if (typeof TextDecoder !== 'undefined') { cachedTextDecoder.decode(); };
+
+const MAX_SAFARI_DECODE_BYTES = 2146435072;
+let numBytesDecoded = 0;
+function decodeText(ptr, len) {
+    numBytesDecoded += len;
+    if (numBytesDecoded >= MAX_SAFARI_DECODE_BYTES) {
+        cachedTextDecoder = (typeof TextDecoder !== 'undefined' ? new TextDecoder('utf-8', { ignoreBOM: true, fatal: true }) : { decode: () => { throw Error('TextDecoder not available') } } );
+        cachedTextDecoder.decode();
+        numBytesDecoded = len;
+    }
+    return cachedTextDecoder.decode(getUint8ArrayMemory0().subarray(ptr, ptr + len));
+}
+
+function getStringFromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    return decodeText(ptr, len);
+}
+
+let WASM_VECTOR_LEN = 0;
 
 const cachedTextEncoder = (typeof TextEncoder !== 'undefined' ? new TextEncoder('utf-8') : { encode: () => { throw Error('TextEncoder not available') } } );
 
@@ -89,29 +116,20 @@ function handleError(f, args) {
     }
 }
 
-function isLikeNone(x) {
-    return x === undefined || x === null;
-}
-
-const cachedTextDecoder = (typeof TextDecoder !== 'undefined' ? new TextDecoder('utf-8', { ignoreBOM: true, fatal: true }) : { decode: () => { throw Error('TextDecoder not available') } } );
-
-if (typeof TextDecoder !== 'undefined') { cachedTextDecoder.decode(); };
-
-function getStringFromWasm0(ptr, len) {
-    ptr = ptr >>> 0;
-    return cachedTextDecoder.decode(getUint8ArrayMemory0().subarray(ptr, ptr + len));
-}
-
-function getArrayU8FromWasm0(ptr, len) {
-    ptr = ptr >>> 0;
-    return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
-}
-
 function passArray8ToWasm0(arg, malloc) {
     const ptr = malloc(arg.length * 1, 1) >>> 0;
     getUint8ArrayMemory0().set(arg, ptr / 1);
     WASM_VECTOR_LEN = arg.length;
     return ptr;
+}
+
+function isLikeNone(x) {
+    return x === undefined || x === null;
+}
+
+function getArrayU8FromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
 }
 
 function _assertClass(instance, klass) {
@@ -120,35 +138,14 @@ function _assertClass(instance, klass) {
     }
 }
 
-const CLOSURE_DTORS = (typeof FinalizationRegistry === 'undefined')
-    ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(state => {
-    wasm.__wbindgen_export_6.get(state.dtor)(state.a, state.b)
-});
-
-function makeMutClosure(arg0, arg1, dtor, f) {
-    const state = { a: arg0, b: arg1, cnt: 1, dtor };
-    const real = (...args) => {
-        // First up with a closure we increment the internal reference
-        // count. This ensures that the Rust closure environment won't
-        // be deallocated while we're invoking it.
-        state.cnt++;
-        const a = state.a;
-        state.a = 0;
-        try {
-            return f(a, state.b, ...args);
-        } finally {
-            if (--state.cnt === 0) {
-                wasm.__wbindgen_export_6.get(state.dtor)(a, state.b);
-                CLOSURE_DTORS.unregister(state);
-            } else {
-                state.a = a;
-            }
-        }
-    };
-    real.original = state;
-    CLOSURE_DTORS.register(real, state, state);
-    return real;
+function passArrayJsValueToWasm0(array, malloc) {
+    const ptr = malloc(array.length * 4, 4) >>> 0;
+    for (let i = 0; i < array.length; i++) {
+        const add = addToExternrefTable0(array[i]);
+        getDataViewMemory0().setUint32(ptr + 4 * i, add, true);
+    }
+    WASM_VECTOR_LEN = array.length;
+    return ptr;
 }
 
 function debugString(val) {
@@ -216,16 +213,44 @@ function debugString(val) {
     return className;
 }
 
+const CLOSURE_DTORS = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(
+state => {
+    wasm.__wbindgen_export_6.get(state.dtor)(state.a, state.b);
+}
+);
+
+function makeMutClosure(arg0, arg1, dtor, f) {
+    const state = { a: arg0, b: arg1, cnt: 1, dtor };
+    const real = (...args) => {
+
+        // First up with a closure we increment the internal reference
+        // count. This ensures that the Rust closure environment won't
+        // be deallocated while we're invoking it.
+        state.cnt++;
+        const a = state.a;
+        state.a = 0;
+        try {
+            return f(a, state.b, ...args);
+        } finally {
+            if (--state.cnt === 0) {
+                wasm.__wbindgen_export_6.get(state.dtor)(a, state.b);
+                CLOSURE_DTORS.unregister(state);
+            } else {
+                state.a = a;
+            }
+        }
+    };
+    real.original = state;
+    CLOSURE_DTORS.register(real, state, state);
+    return real;
+}
+
 function takeFromExternrefTable0(idx) {
     const value = wasm.__wbindgen_export_4.get(idx);
     wasm.__externref_table_dealloc(idx);
     return value;
-}
-/**
- * Initializes the console error panic hook for better error messages
- */
-export function start() {
-    wasm.start();
 }
 
 function getArrayJsValueFromWasm0(ptr, len) {
@@ -237,16 +262,6 @@ function getArrayJsValueFromWasm0(ptr, len) {
     }
     wasm.__externref_drop_slice(ptr, len);
     return result;
-}
-
-function passArrayJsValueToWasm0(array, malloc) {
-    const ptr = malloc(array.length * 4, 4) >>> 0;
-    for (let i = 0; i < array.length; i++) {
-        const add = addToExternrefTable0(array[i]);
-        getDataViewMemory0().setUint32(ptr + 4 * i, add, true);
-    }
-    WASM_VECTOR_LEN = array.length;
-    return ptr;
 }
 
 let cachedUint32ArrayMemory0 = null;
@@ -262,6 +277,29 @@ function getArrayU32FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
     return getUint32ArrayMemory0().subarray(ptr / 4, ptr / 4 + len);
 }
+/**
+ * Initializes the console error panic hook for better error messages
+ */
+export function start() {
+    wasm.start();
+}
+
+/**
+ * @param {string} resource
+ * @returns {string | undefined}
+ */
+export function vctToUrl(resource) {
+    const ptr0 = passStringToWasm0(resource, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.vctToUrl(ptr0, len0);
+    let v2;
+    if (ret[0] !== 0) {
+        v2 = getStringFromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    }
+    return v2;
+}
+
 /**
  * Verify a JWS signature secured with the `EdDSA` algorithm and curve `Ed25519`.
  *
@@ -287,22 +325,6 @@ export function verifyEd25519(alg, signingInput, decodedSignature, publicKey) {
     if (ret[1]) {
         throw takeFromExternrefTable0(ret[0]);
     }
-}
-
-/**
- * @param {string} resource
- * @returns {string | undefined}
- */
-export function vctToUrl(resource) {
-    const ptr0 = passStringToWasm0(resource, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.vctToUrl(ptr0, len0);
-    let v2;
-    if (ret[0] !== 0) {
-        v2 = getStringFromWasm0(ret[0], ret[1]).slice();
-        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    }
-    return v2;
 }
 
 /**
@@ -342,12 +364,16 @@ export function decodeB64(data) {
     return v2;
 }
 
-function __wbg_adapter_56(arg0, arg1, arg2) {
-    wasm.closure757_externref_shim(arg0, arg1, arg2);
+function __wbg_adapter_6(arg0, arg1) {
+    wasm.wasm_bindgen__convert__closures_____invoke__h4ad227bb815299b9(arg0, arg1);
 }
 
-function __wbg_adapter_1029(arg0, arg1, arg2, arg3) {
-    wasm.closure3245_externref_shim(arg0, arg1, arg2, arg3);
+function __wbg_adapter_19(arg0, arg1, arg2) {
+    wasm.closure4453_externref_shim(arg0, arg1, arg2);
+}
+
+function __wbg_adapter_1455(arg0, arg1, arg2, arg3) {
+    wasm.closure4665_externref_shim(arg0, arg1, arg2, arg3);
 }
 
 /**
@@ -426,9 +452,13 @@ export const SerializationType = Object.freeze({
     JSON: 1, "1": "JSON",
 });
 /**
+ * Indicates the encoding of a DID document in state metadata.
  * @enum {0}
  */
 export const StateMetadataEncoding = Object.freeze({
+    /**
+     * State Metadata encoded as JSON.
+     */
     Json: 0, "0": "Json",
 });
 /**
@@ -461,7 +491,13 @@ export const StatusCheck = Object.freeze({
  * @enum {0 | 1}
  */
 export const StatusPurpose = Object.freeze({
+    /**
+     * Used for revocation.
+     */
     Revocation: 0, "0": "Revocation",
+    /**
+     * Used for suspension.
+     */
     Suspension: 1, "1": "Suspension",
 });
 /**
@@ -485,6 +521,660 @@ export const SubjectHolderRelationship = Object.freeze({
      */
     Any: 2, "2": "Any",
 });
+
+const __wbindgen_enum_RequestCache = ["default", "no-store", "reload", "no-cache", "force-cache", "only-if-cached"];
+
+const __wbindgen_enum_RequestCredentials = ["omit", "same-origin", "include"];
+
+const __wbindgen_enum_RequestMode = ["same-origin", "no-cors", "cors", "navigate"];
+
+const AccessSubIdentityFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_accesssubidentity_free(ptr >>> 0, 1));
+/**
+ * Action to access an Identity controlled by another Identity.
+ */
+export class AccessSubIdentity {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(AccessSubIdentity.prototype);
+        obj.__wbg_ptr = ptr;
+        AccessSubIdentityFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    toJSON() {
+        return {
+            identity: this.identity,
+            sub_identity: this.sub_identity,
+        };
+    }
+
+    toString() {
+        return JSON.stringify(this);
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        AccessSubIdentityFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_accesssubidentity_free(ptr, 0);
+    }
+    /**
+     * Object ID of the Identity whose token will be used.
+     * @returns {string}
+     */
+    get identity() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.__wbg_get_accesssubidentity_identity(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * Object ID of the Identity whose token will be used.
+     * @param {string} arg0
+     */
+    set identity(arg0) {
+        const ptr0 = passStringToWasm0(arg0, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.__wbg_set_accesssubidentity_identity(this.__wbg_ptr, ptr0, len0);
+    }
+    /**
+     * Object ID of the sub-Identity that will be accessed.
+     * @returns {string}
+     */
+    get sub_identity() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.__wbg_get_accesssubidentity_sub_identity(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * Object ID of the sub-Identity that will be accessed.
+     * @param {string} arg0
+     */
+    set sub_identity(arg0) {
+        const ptr0 = passStringToWasm0(arg0, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.__wbg_set_accesssubidentity_sub_identity(this.__wbg_ptr, ptr0, len0);
+    }
+    /**
+     * @param {string} identity
+     * @param {string} sub_identity
+     */
+    constructor(identity, sub_identity) {
+        const ptr0 = passStringToWasm0(identity, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(sub_identity, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.accesssubidentity_new(ptr0, len0, ptr1, len1);
+        this.__wbg_ptr = ret >>> 0;
+        AccessSubIdentityFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * @returns {any}
+     */
+    toJSON() {
+        const ret = wasm.accesssubidentity_toJSON(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+}
+
+const AccessSubIdentityProposalFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_accesssubidentityproposal_free(ptr >>> 0, 1));
+
+export class AccessSubIdentityProposal {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(AccessSubIdentityProposal.prototype);
+        obj.__wbg_ptr = ptr;
+        AccessSubIdentityProposalFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        AccessSubIdentityProposalFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_accesssubidentityproposal_free(ptr, 0);
+    }
+    /**
+     * @returns {string}
+     */
+    get id() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.accesssubidentityproposal_id(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * @returns {AccessSubIdentity}
+     */
+    get action() {
+        const ret = wasm.accesssubidentityproposal_action(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return AccessSubIdentity.__wrap(ret[0]);
+    }
+    /**
+     * @returns {bigint | undefined}
+     */
+    get expiration_epoch() {
+        const ret = wasm.accesssubidentityproposal_expiration_epoch(this.__wbg_ptr);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        return ret[0] === 0 ? undefined : BigInt.asUintN(64, ret[1]);
+    }
+    /**
+     * @returns {bigint}
+     */
+    get votes() {
+        const ret = wasm.accesssubidentityproposal_votes(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return BigInt.asUintN(64, ret[0]);
+    }
+    /**
+     * @returns {Set<string>}
+     */
+    get voters() {
+        const ret = wasm.accesssubidentityproposal_voters(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * @param {OnChainIdentity} identity
+     * @param {ControllerToken} controller_token
+     * @returns {TransactionBuilder<ApproveProposal>}
+     */
+    approve(identity, controller_token) {
+        _assertClass(identity, OnChainIdentity);
+        _assertClass(controller_token, ControllerToken);
+        const ret = wasm.accesssubidentityproposal_approve(this.__wbg_ptr, identity.__wbg_ptr, controller_token.__wbg_ptr);
+        return TransactionBuilder.__wrap(ret);
+    }
+    /**
+     * @param {OnChainIdentity} identity
+     * @param {ControllerToken} controller_token
+     * @param {OnChainIdentity} sub_identity
+     * @param {SubAccessFn<unknown>} sub_access_fn
+     * @returns {TransactionBuilder}
+     */
+    intoTx(identity, controller_token, sub_identity, sub_access_fn) {
+        const ptr = this.__destroy_into_raw();
+        _assertClass(identity, OnChainIdentity);
+        _assertClass(controller_token, ControllerToken);
+        _assertClass(sub_identity, OnChainIdentity);
+        const ret = wasm.accesssubidentityproposal_intoTx(ptr, identity.__wbg_ptr, controller_token.__wbg_ptr, sub_identity.__wbg_ptr, sub_access_fn);
+        return TransactionBuilder.__wrap(ret);
+    }
+}
+
+const ApproveBorrowProposalFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_approveborrowproposal_free(ptr >>> 0, 1));
+
+export class ApproveBorrowProposal {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(ApproveBorrowProposal.prototype);
+        obj.__wbg_ptr = ptr;
+        ApproveBorrowProposalFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ApproveBorrowProposalFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_approveborrowproposal_free(ptr, 0);
+    }
+    /**
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<Uint8Array>}
+     */
+    buildProgrammableTransaction(client) {
+        const ret = wasm.approveborrowproposal_buildProgrammableTransaction(this.__wbg_ptr, client);
+        return ret;
+    }
+    /**
+     * @param {TransactionEffects} wasm_effects
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<void>}
+     */
+    apply(wasm_effects, client) {
+        const ret = wasm.approveborrowproposal_apply(this.__wbg_ptr, wasm_effects, client);
+        return ret;
+    }
+}
+
+const ApproveConfigChangeProposalFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_approveconfigchangeproposal_free(ptr >>> 0, 1));
+
+export class ApproveConfigChangeProposal {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(ApproveConfigChangeProposal.prototype);
+        obj.__wbg_ptr = ptr;
+        ApproveConfigChangeProposalFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ApproveConfigChangeProposalFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_approveconfigchangeproposal_free(ptr, 0);
+    }
+    /**
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<Uint8Array>}
+     */
+    buildProgrammableTransaction(client) {
+        const ret = wasm.approveconfigchangeproposal_buildProgrammableTransaction(this.__wbg_ptr, client);
+        return ret;
+    }
+    /**
+     * @param {TransactionEffects} wasm_effects
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<void>}
+     */
+    apply(wasm_effects, client) {
+        const ret = wasm.approveconfigchangeproposal_apply(this.__wbg_ptr, wasm_effects, client);
+        return ret;
+    }
+}
+
+const ApproveControllerExecutionProposalFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_approvecontrollerexecutionproposal_free(ptr >>> 0, 1));
+
+export class ApproveControllerExecutionProposal {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(ApproveControllerExecutionProposal.prototype);
+        obj.__wbg_ptr = ptr;
+        ApproveControllerExecutionProposalFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ApproveControllerExecutionProposalFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_approvecontrollerexecutionproposal_free(ptr, 0);
+    }
+    /**
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<Uint8Array>}
+     */
+    buildProgrammableTransaction(client) {
+        const ret = wasm.approvecontrollerexecutionproposal_buildProgrammableTransaction(this.__wbg_ptr, client);
+        return ret;
+    }
+    /**
+     * @param {TransactionEffects} wasm_effects
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<void>}
+     */
+    apply(wasm_effects, client) {
+        const ret = wasm.approvecontrollerexecutionproposal_apply(this.__wbg_ptr, wasm_effects, client);
+        return ret;
+    }
+}
+
+const ApproveSendProposalFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_approvesendproposal_free(ptr >>> 0, 1));
+
+export class ApproveSendProposal {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(ApproveSendProposal.prototype);
+        obj.__wbg_ptr = ptr;
+        ApproveSendProposalFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ApproveSendProposalFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_approvesendproposal_free(ptr, 0);
+    }
+    /**
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<Uint8Array>}
+     */
+    buildProgrammableTransaction(client) {
+        const ptr = this.__destroy_into_raw();
+        const ret = wasm.approvesendproposal_buildProgrammableTransaction(ptr, client);
+        return ret;
+    }
+    /**
+     * @param {TransactionEffects} wasm_effects
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<void>}
+     */
+    apply(wasm_effects, client) {
+        const ptr = this.__destroy_into_raw();
+        const ret = wasm.approvesendproposal_apply(ptr, wasm_effects, client);
+        return ret;
+    }
+}
+
+const ApproveUpdateDidDocumentProposalFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_approveupdatediddocumentproposal_free(ptr >>> 0, 1));
+
+export class ApproveUpdateDidDocumentProposal {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(ApproveUpdateDidDocumentProposal.prototype);
+        obj.__wbg_ptr = ptr;
+        ApproveUpdateDidDocumentProposalFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ApproveUpdateDidDocumentProposalFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_approveupdatediddocumentproposal_free(ptr, 0);
+    }
+    /**
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<Uint8Array>}
+     */
+    buildProgrammableTransaction(client) {
+        const ret = wasm.approveupdatediddocumentproposal_buildProgrammableTransaction(this.__wbg_ptr, client);
+        return ret;
+    }
+    /**
+     * @param {TransactionEffects} wasm_effects
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<void>}
+     */
+    apply(wasm_effects, client) {
+        const ret = wasm.approveupdatediddocumentproposal_apply(this.__wbg_ptr, wasm_effects, client);
+        return ret;
+    }
+}
+
+const BorrowFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_borrow_free(ptr >>> 0, 1));
+
+export class Borrow {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(Borrow.prototype);
+        obj.__wbg_ptr = ptr;
+        BorrowFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    toJSON() {
+        return {
+            borrow_fn: this.borrow_fn,
+            objects: this.objects,
+        };
+    }
+
+    toString() {
+        return JSON.stringify(this);
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        BorrowFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_borrow_free(ptr, 0);
+    }
+    /**
+     * @returns {BorrowFn | undefined}
+     */
+    get borrow_fn() {
+        const ret = wasm.__wbg_get_borrow_borrow_fn(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {BorrowFn | null} [arg0]
+     */
+    set borrow_fn(arg0) {
+        wasm.__wbg_set_borrow_borrow_fn(this.__wbg_ptr, isLikeNone(arg0) ? 0 : addToExternrefTable0(arg0));
+    }
+    /**
+     * @param {string[]} objects
+     * @param {BorrowFn | null} [borrow_fn]
+     */
+    constructor(objects, borrow_fn) {
+        const ptr0 = passArrayJsValueToWasm0(objects, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.borrow_new(ptr0, len0, isLikeNone(borrow_fn) ? 0 : addToExternrefTable0(borrow_fn));
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        this.__wbg_ptr = ret[0] >>> 0;
+        BorrowFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * @returns {string[]}
+     */
+    get objects() {
+        const ret = wasm.borrow_objects(this.__wbg_ptr);
+        var v1 = getArrayJsValueFromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+}
+
+const BorrowProposalFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_borrowproposal_free(ptr >>> 0, 1));
+
+export class BorrowProposal {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(BorrowProposal.prototype);
+        obj.__wbg_ptr = ptr;
+        BorrowProposalFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        BorrowProposalFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_borrowproposal_free(ptr, 0);
+    }
+    /**
+     * @returns {string}
+     */
+    get id() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.borrowproposal_id(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * @returns {Borrow}
+     */
+    get action() {
+        const ret = wasm.borrowproposal_action(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return Borrow.__wrap(ret[0]);
+    }
+    /**
+     * @returns {bigint | undefined}
+     */
+    get expiration_epoch() {
+        const ret = wasm.borrowproposal_expiration_epoch(this.__wbg_ptr);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        return ret[0] === 0 ? undefined : BigInt.asUintN(64, ret[1]);
+    }
+    /**
+     * @returns {bigint}
+     */
+    get votes() {
+        const ret = wasm.borrowproposal_votes(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return BigInt.asUintN(64, ret[0]);
+    }
+    /**
+     * @returns {Set<string>}
+     */
+    get voters() {
+        const ret = wasm.borrowproposal_voters(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * @param {BorrowFn} borrow_fn
+     */
+    set borrowFn(borrow_fn) {
+        const ret = wasm.borrowproposal_set_borrowFn(this.__wbg_ptr, borrow_fn);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
+     * @param {OnChainIdentity} identity
+     * @param {ControllerToken} controller_token
+     * @returns {TransactionBuilder<ApproveProposal>}
+     */
+    approve(identity, controller_token) {
+        _assertClass(identity, OnChainIdentity);
+        _assertClass(controller_token, ControllerToken);
+        const ret = wasm.borrowproposal_approve(this.__wbg_ptr, identity.__wbg_ptr, controller_token.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return TransactionBuilder.__wrap(ret[0]);
+    }
+    /**
+     * @param {OnChainIdentity} identity
+     * @param {ControllerToken} controller_token
+     * @returns {TransactionBuilder<ExecuteProposal<Borrow>>}
+     */
+    intoTx(identity, controller_token) {
+        const ptr = this.__destroy_into_raw();
+        _assertClass(identity, OnChainIdentity);
+        _assertClass(controller_token, ControllerToken);
+        const ret = wasm.borrowproposal_intoTx(ptr, identity.__wbg_ptr, controller_token.__wbg_ptr);
+        return TransactionBuilder.__wrap(ret);
+    }
+}
 
 const ClaimDisplayFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
@@ -703,6 +1393,706 @@ export class ClaimMetadata {
         var ptr0 = isLikeNone(arg0) ? 0 : passStringToWasm0(arg0, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         var len0 = WASM_VECTOR_LEN;
         wasm.__wbg_set_claimmetadata_svg_id(this.__wbg_ptr, ptr0, len0);
+    }
+}
+
+const ConfigChangeFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_configchange_free(ptr >>> 0, 1));
+
+export class ConfigChange {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(ConfigChange.prototype);
+        obj.__wbg_ptr = ptr;
+        ConfigChangeFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    toJSON() {
+        return {
+            threshold: this.threshold,
+            controllersToAdd: this.controllersToAdd,
+            controllersToRemove: this.controllersToRemove,
+            controllersToUpdate: this.controllersToUpdate,
+        };
+    }
+
+    toString() {
+        return JSON.stringify(this);
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ConfigChangeFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_configchange_free(ptr, 0);
+    }
+    /**
+     * @returns {bigint | undefined}
+     */
+    get threshold() {
+        const ret = wasm.__wbg_get_configchange_threshold(this.__wbg_ptr);
+        return ret[0] === 0 ? undefined : BigInt.asUintN(64, ret[1]);
+    }
+    /**
+     * @param {bigint | null} [arg0]
+     */
+    set threshold(arg0) {
+        wasm.__wbg_set_configchange_threshold(this.__wbg_ptr, !isLikeNone(arg0), isLikeNone(arg0) ? BigInt(0) : arg0);
+    }
+    /**
+     * @returns {Map<string, number> | undefined}
+     */
+    get controllersToAdd() {
+        const ret = wasm.__wbg_get_configchange_controllersToAdd(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {Map<string, number> | null} [arg0]
+     */
+    set controllersToAdd(arg0) {
+        wasm.__wbg_set_configchange_controllersToAdd(this.__wbg_ptr, isLikeNone(arg0) ? 0 : addToExternrefTable0(arg0));
+    }
+    /**
+     * @returns {Set<string> | undefined}
+     */
+    get controllersToRemove() {
+        const ret = wasm.__wbg_get_configchange_controllersToRemove(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {Set<string> | null} [arg0]
+     */
+    set controllersToRemove(arg0) {
+        wasm.__wbg_set_configchange_controllersToRemove(this.__wbg_ptr, isLikeNone(arg0) ? 0 : addToExternrefTable0(arg0));
+    }
+    /**
+     * @returns {Map<string, number> | undefined}
+     */
+    get controllersToUpdate() {
+        const ret = wasm.__wbg_get_configchange_controllersToUpdate(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {Map<string, number> | null} [arg0]
+     */
+    set controllersToUpdate(arg0) {
+        wasm.__wbg_set_configchange_controllersToUpdate(this.__wbg_ptr, isLikeNone(arg0) ? 0 : addToExternrefTable0(arg0));
+    }
+}
+
+const ConfigChangeProposalFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_configchangeproposal_free(ptr >>> 0, 1));
+
+export class ConfigChangeProposal {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(ConfigChangeProposal.prototype);
+        obj.__wbg_ptr = ptr;
+        ConfigChangeProposalFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ConfigChangeProposalFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_configchangeproposal_free(ptr, 0);
+    }
+    /**
+     * @returns {string}
+     */
+    get id() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.configchangeproposal_id(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * @returns {ConfigChange}
+     */
+    get action() {
+        const ret = wasm.configchangeproposal_action(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ConfigChange.__wrap(ret[0]);
+    }
+    /**
+     * @returns {bigint | undefined}
+     */
+    get expiration_epoch() {
+        const ret = wasm.configchangeproposal_expiration_epoch(this.__wbg_ptr);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        return ret[0] === 0 ? undefined : BigInt.asUintN(64, ret[1]);
+    }
+    /**
+     * @returns {bigint}
+     */
+    get votes() {
+        const ret = wasm.configchangeproposal_votes(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return BigInt.asUintN(64, ret[0]);
+    }
+    /**
+     * @returns {Set<string>}
+     */
+    get voters() {
+        const ret = wasm.configchangeproposal_voters(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * @param {OnChainIdentity} identity
+     * @param {ControllerToken} controller_token
+     * @returns {TransactionBuilder<ApproveProposal>}
+     */
+    approve(identity, controller_token) {
+        _assertClass(identity, OnChainIdentity);
+        _assertClass(controller_token, ControllerToken);
+        const ret = wasm.configchangeproposal_approve(this.__wbg_ptr, identity.__wbg_ptr, controller_token.__wbg_ptr);
+        return TransactionBuilder.__wrap(ret);
+    }
+    /**
+     * @param {OnChainIdentity} identity
+     * @param {ControllerToken} controller_token
+     * @returns {TransactionBuilder<ExecuteProposal<ConfigChange>>}
+     */
+    intoTx(identity, controller_token) {
+        const ptr = this.__destroy_into_raw();
+        _assertClass(identity, OnChainIdentity);
+        _assertClass(controller_token, ControllerToken);
+        const ret = wasm.configchangeproposal_intoTx(ptr, identity.__wbg_ptr, controller_token.__wbg_ptr);
+        return TransactionBuilder.__wrap(ret);
+    }
+}
+
+const ControllerAndVotingPowerFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_controllerandvotingpower_free(ptr >>> 0, 1));
+
+export class ControllerAndVotingPower {
+
+    static __unwrap(jsValue) {
+        if (!(jsValue instanceof ControllerAndVotingPower)) {
+            return 0;
+        }
+        return jsValue.__destroy_into_raw();
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ControllerAndVotingPowerFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_controllerandvotingpower_free(ptr, 0);
+    }
+    /**
+     * @returns {string}
+     */
+    get 0() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.__wbg_get_controllerandvotingpower_0(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @param {string} arg0
+     */
+    set 0(arg0) {
+        const ptr0 = passStringToWasm0(arg0, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.__wbg_set_controllerandvotingpower_0(this.__wbg_ptr, ptr0, len0);
+    }
+    /**
+     * @returns {bigint}
+     */
+    get 1() {
+        const ret = wasm.__wbg_get_controllerandvotingpower_1(this.__wbg_ptr);
+        return BigInt.asUintN(64, ret);
+    }
+    /**
+     * @param {bigint} arg0
+     */
+    set 1(arg0) {
+        wasm.__wbg_set_controllerandvotingpower_1(this.__wbg_ptr, arg0);
+    }
+    /**
+     * @returns {boolean}
+     */
+    get 2() {
+        const ret = wasm.__wbg_get_controllerandvotingpower_2(this.__wbg_ptr);
+        return ret !== 0;
+    }
+    /**
+     * @param {boolean} arg0
+     */
+    set 2(arg0) {
+        wasm.__wbg_set_controllerandvotingpower_2(this.__wbg_ptr, arg0);
+    }
+    /**
+     * @param {string} address
+     * @param {bigint} voting_power
+     * @param {boolean} can_delegate
+     */
+    constructor(address, voting_power, can_delegate) {
+        const ptr0 = passStringToWasm0(address, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.controllerandvotingpower_new(ptr0, len0, voting_power, can_delegate);
+        this.__wbg_ptr = ret >>> 0;
+        ControllerAndVotingPowerFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+}
+
+const ControllerCapFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_controllercap_free(ptr >>> 0, 1));
+/**
+ * A token that authenticates its bearer as a controller of a specific shared object.
+ */
+export class ControllerCap {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(ControllerCap.prototype);
+        obj.__wbg_ptr = ptr;
+        ControllerCapFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ControllerCapFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_controllercap_free(ptr, 0);
+    }
+    /**
+     * Returns the ID of this {@link ControllerCap}.
+     * @returns {string}
+     */
+    get id() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.controllercap_id(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * Returns the ID of the object this token controls.
+     * @returns {string}
+     */
+    get controllerOf() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.controllercap_controllerOf(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * Returns whether this controller is allowed to delegate
+     * its access to the controlled object.
+     * @returns {boolean}
+     */
+    get canDelegate() {
+        const ret = wasm.controllercap_canDelegate(this.__wbg_ptr);
+        return ret !== 0;
+    }
+    /**
+     * If this token can be delegated, this function will return
+     * a {@link DelegationToken} Transaction that will mint a new {@link DelegationToken}
+     * and send it to `recipient`.
+     * @param {string} recipient
+     * @param {DelegatePermissions | undefined | null} permissions
+     * @returns {TransactionBuilder}
+     */
+    delegate(recipient, permissions) {
+        const ptr0 = passStringToWasm0(recipient, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.controllercap_delegate(this.__wbg_ptr, ptr0, len0, isLikeNone(permissions) ? 0x100000001 : (permissions) >>> 0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return TransactionBuilder.__wrap(ret[0]);
+    }
+}
+
+const ControllerExecutionFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_controllerexecution_free(ptr >>> 0, 1));
+
+export class ControllerExecution {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(ControllerExecution.prototype);
+        obj.__wbg_ptr = ptr;
+        ControllerExecutionFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    toJSON() {
+        return {
+            controller_exec_fn: this.controller_exec_fn,
+            controllerCap: this.controllerCap,
+            identityAddress: this.identityAddress,
+        };
+    }
+
+    toString() {
+        return JSON.stringify(this);
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ControllerExecutionFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_controllerexecution_free(ptr, 0);
+    }
+    /**
+     * @returns {ControllerExecutionFn | undefined}
+     */
+    get controller_exec_fn() {
+        const ret = wasm.__wbg_get_controllerexecution_controller_exec_fn(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {ControllerExecutionFn | null} [arg0]
+     */
+    set controller_exec_fn(arg0) {
+        wasm.__wbg_set_borrow_borrow_fn(this.__wbg_ptr, isLikeNone(arg0) ? 0 : addToExternrefTable0(arg0));
+    }
+    /**
+     * @param {string} controller_cap
+     * @param {OnChainIdentity} identity
+     * @param {ControllerExecutionFn | null} [exec_fn]
+     */
+    constructor(controller_cap, identity, exec_fn) {
+        const ptr0 = passStringToWasm0(controller_cap, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        _assertClass(identity, OnChainIdentity);
+        const ret = wasm.controllerexecution_new(ptr0, len0, identity.__wbg_ptr, isLikeNone(exec_fn) ? 0 : addToExternrefTable0(exec_fn));
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        this.__wbg_ptr = ret[0] >>> 0;
+        ControllerExecutionFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * @returns {string}
+     */
+    get controllerCap() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.controllerexecution_controllerCap(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @returns {string}
+     */
+    get identityAddress() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.controllerexecution_identityAddress(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+}
+
+const ControllerExecutionProposalFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_controllerexecutionproposal_free(ptr >>> 0, 1));
+
+export class ControllerExecutionProposal {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(ControllerExecutionProposal.prototype);
+        obj.__wbg_ptr = ptr;
+        ControllerExecutionProposalFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ControllerExecutionProposalFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_controllerexecutionproposal_free(ptr, 0);
+    }
+    /**
+     * @returns {string}
+     */
+    get id() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.controllerexecutionproposal_id(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * @returns {ControllerExecution}
+     */
+    get action() {
+        const ret = wasm.controllerexecutionproposal_action(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ControllerExecution.__wrap(ret[0]);
+    }
+    /**
+     * @returns {bigint | undefined}
+     */
+    get expiration_epoch() {
+        const ret = wasm.controllerexecutionproposal_expiration_epoch(this.__wbg_ptr);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        return ret[0] === 0 ? undefined : BigInt.asUintN(64, ret[1]);
+    }
+    /**
+     * @returns {bigint}
+     */
+    get votes() {
+        const ret = wasm.controllerexecutionproposal_votes(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return BigInt.asUintN(64, ret[0]);
+    }
+    /**
+     * @returns {Set<string>}
+     */
+    get voters() {
+        const ret = wasm.controllerexecutionproposal_voters(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * @param {ControllerExecutionFn} exec_fn
+     */
+    set execFn(exec_fn) {
+        const ret = wasm.controllerexecutionproposal_set_execFn(this.__wbg_ptr, exec_fn);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
+     * @param {OnChainIdentity} identity
+     * @param {ControllerToken} controller_token
+     * @returns {TransactionBuilder<ApproveProposal>}
+     */
+    approve(identity, controller_token) {
+        _assertClass(identity, OnChainIdentity);
+        _assertClass(controller_token, ControllerToken);
+        const ret = wasm.controllerexecutionproposal_approve(this.__wbg_ptr, identity.__wbg_ptr, controller_token.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return TransactionBuilder.__wrap(ret[0]);
+    }
+    /**
+     * @param {OnChainIdentity} identity
+     * @param {ControllerToken} controller_token
+     * @returns {TransactionBuilder<ExecuteProposal<ControllerExecution>>}
+     */
+    intoTx(identity, controller_token) {
+        const ptr = this.__destroy_into_raw();
+        _assertClass(identity, OnChainIdentity);
+        _assertClass(controller_token, ControllerToken);
+        const ret = wasm.controllerexecutionproposal_intoTx(ptr, identity.__wbg_ptr, controller_token.__wbg_ptr);
+        return TransactionBuilder.__wrap(ret);
+    }
+}
+
+const ControllerTokenFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_controllertoken_free(ptr >>> 0, 1));
+
+export class ControllerToken {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(ControllerToken.prototype);
+        obj.__wbg_ptr = ptr;
+        ControllerTokenFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ControllerTokenFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_controllertoken_free(ptr, 0);
+    }
+    /**
+     * @param {ControllerCap} cap
+     * @returns {ControllerToken}
+     */
+    static fromControllerCap(cap) {
+        _assertClass(cap, ControllerCap);
+        const ret = wasm.controllertoken_fromControllerCap(cap.__wbg_ptr);
+        return ControllerToken.__wrap(ret);
+    }
+    /**
+     * @param {DelegationToken} token
+     * @returns {ControllerToken}
+     */
+    static fromDelegationToken(token) {
+        _assertClass(token, DelegationToken);
+        const ret = wasm.controllertoken_fromDelegationToken(token.__wbg_ptr);
+        return ControllerToken.__wrap(ret);
+    }
+    /**
+     * @returns {string}
+     */
+    id() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.controllertoken_id(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @returns {string}
+     */
+    controllerOf() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.controllertoken_controllerOf(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @returns {ControllerCap | undefined}
+     */
+    toControllerCap() {
+        const ret = wasm.controllertoken_toControllerCap(this.__wbg_ptr);
+        return ret === 0 ? undefined : ControllerCap.__wrap(ret);
+    }
+    /**
+     * @returns {DelegationToken | undefined}
+     */
+    toDelegationToken() {
+        const ret = wasm.controllertoken_toDelegationToken(this.__wbg_ptr);
+        return ret === 0 ? undefined : DelegationToken.__wrap(ret);
+    }
+    /**
+     * @param {string} id
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<ControllerToken>}
+     */
+    static getById(id, client) {
+        const ptr0 = passStringToWasm0(id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.controllertoken_getById(ptr0, len0, client);
+        return ret;
     }
 }
 
@@ -1589,10 +2979,293 @@ export class CoreDocument {
     }
 }
 
+const CreateBorrowProposalFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_createborrowproposal_free(ptr >>> 0, 1));
+
+export class CreateBorrowProposal {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(CreateBorrowProposal.prototype);
+        obj.__wbg_ptr = ptr;
+        CreateBorrowProposalFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        CreateBorrowProposalFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_createborrowproposal_free(ptr, 0);
+    }
+    /**
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<Uint8Array>}
+     */
+    buildProgrammableTransaction(client) {
+        const ret = wasm.createborrowproposal_buildProgrammableTransaction(this.__wbg_ptr, client);
+        return ret;
+    }
+    /**
+     * @param {TransactionEffects} wasm_effects
+     * @param {CoreClientReadOnly} client
+     * @returns {ProposalResult<Borrow>}
+     */
+    apply(wasm_effects, client) {
+        const ptr = this.__destroy_into_raw();
+        const ret = wasm.createborrowproposal_apply(ptr, wasm_effects, client);
+        return ret;
+    }
+}
+
+const CreateConfigChangeProposalFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_createconfigchangeproposal_free(ptr >>> 0, 1));
+
+export class CreateConfigChangeProposal {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(CreateConfigChangeProposal.prototype);
+        obj.__wbg_ptr = ptr;
+        CreateConfigChangeProposalFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        CreateConfigChangeProposalFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_createconfigchangeproposal_free(ptr, 0);
+    }
+    /**
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<Uint8Array>}
+     */
+    buildProgrammableTransaction(client) {
+        const ret = wasm.createconfigchangeproposal_buildProgrammableTransaction(this.__wbg_ptr, client);
+        return ret;
+    }
+    /**
+     * @param {TransactionEffects} wasm_effects
+     * @param {CoreClientReadOnly} client
+     * @returns {ProposalResult<ConfigChange>}
+     */
+    apply(wasm_effects, client) {
+        const ptr = this.__destroy_into_raw();
+        const ret = wasm.createconfigchangeproposal_apply(ptr, wasm_effects, client);
+        return ret;
+    }
+}
+
+const CreateControllerExecutionProposalFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_createcontrollerexecutionproposal_free(ptr >>> 0, 1));
+
+export class CreateControllerExecutionProposal {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(CreateControllerExecutionProposal.prototype);
+        obj.__wbg_ptr = ptr;
+        CreateControllerExecutionProposalFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        CreateControllerExecutionProposalFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_createcontrollerexecutionproposal_free(ptr, 0);
+    }
+    /**
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<Uint8Array>}
+     */
+    buildProgrammableTransaction(client) {
+        const ret = wasm.createcontrollerexecutionproposal_buildProgrammableTransaction(this.__wbg_ptr, client);
+        return ret;
+    }
+    /**
+     * @param {TransactionEffects} wasm_effects
+     * @param {CoreClientReadOnly} client
+     * @returns {ProposalResult<ControllerExecution>}
+     */
+    apply(wasm_effects, client) {
+        const ptr = this.__destroy_into_raw();
+        const ret = wasm.createcontrollerexecutionproposal_apply(ptr, wasm_effects, client);
+        return ret;
+    }
+}
+
+const CreateIdentityFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_createidentity_free(ptr >>> 0, 1));
+
+export class CreateIdentity {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(CreateIdentity.prototype);
+        obj.__wbg_ptr = ptr;
+        CreateIdentityFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        CreateIdentityFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_createidentity_free(ptr, 0);
+    }
+    /**
+     * @param {IdentityBuilder} builder
+     */
+    constructor(builder) {
+        _assertClass(builder, IdentityBuilder);
+        var ptr0 = builder.__destroy_into_raw();
+        const ret = wasm.createidentity_new(ptr0);
+        this.__wbg_ptr = ret >>> 0;
+        CreateIdentityFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<Uint8Array>}
+     */
+    buildProgrammableTransaction(client) {
+        const ret = wasm.createidentity_buildProgrammableTransaction(this.__wbg_ptr, client);
+        return ret;
+    }
+    /**
+     * @param {TransactionEffects} wasm_effects
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<OnChainIdentity>}
+     */
+    apply(wasm_effects, client) {
+        const ptr = this.__destroy_into_raw();
+        const ret = wasm.createidentity_apply(ptr, wasm_effects, client);
+        return ret;
+    }
+}
+
+const CreateSendProposalFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_createsendproposal_free(ptr >>> 0, 1));
+
+export class CreateSendProposal {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(CreateSendProposal.prototype);
+        obj.__wbg_ptr = ptr;
+        CreateSendProposalFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        CreateSendProposalFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_createsendproposal_free(ptr, 0);
+    }
+    /**
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<Uint8Array>}
+     */
+    buildProgrammableTransaction(client) {
+        const ret = wasm.createsendproposal_buildProgrammableTransaction(this.__wbg_ptr, client);
+        return ret;
+    }
+    /**
+     * @param {TransactionEffects} wasm_effects
+     * @param {CoreClientReadOnly} client
+     * @returns {ProposalResult<SendProposal>}
+     */
+    apply(wasm_effects, client) {
+        const ptr = this.__destroy_into_raw();
+        const ret = wasm.createsendproposal_apply(ptr, wasm_effects, client);
+        return ret;
+    }
+}
+
+const CreateUpdateDidProposalFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_createupdatedidproposal_free(ptr >>> 0, 1));
+
+export class CreateUpdateDidProposal {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(CreateUpdateDidProposal.prototype);
+        obj.__wbg_ptr = ptr;
+        CreateUpdateDidProposalFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        CreateUpdateDidProposalFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_createupdatedidproposal_free(ptr, 0);
+    }
+    /**
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<Uint8Array>}
+     */
+    buildProgrammableTransaction(client) {
+        const ret = wasm.createupdatedidproposal_buildProgrammableTransaction(this.__wbg_ptr, client);
+        return ret;
+    }
+    /**
+     * @param {TransactionEffects} wasm_effects
+     * @param {CoreClientReadOnly} client
+     * @returns {ProposalResult<UpdateDid>}
+     */
+    apply(wasm_effects, client) {
+        const ptr = this.__destroy_into_raw();
+        const ret = wasm.createupdatedidproposal_apply(ptr, wasm_effects, client);
+        return ret;
+    }
+}
+
 const CredentialFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_credential_free(ptr >>> 0, 1));
-
+/**
+ * Represents a set of claims describing an entity.
+ */
 export class Credential {
 
     static __wrap(ptr) {
@@ -2806,6 +4479,365 @@ export class DecodedJwtPresentation {
     }
 }
 
+const DefaultHttpClientFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_defaulthttpclient_free(ptr >>> 0, 1));
+/**
+ * A default implementation for {@link HttpClient}.
+ */
+export class DefaultHttpClient {
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        DefaultHttpClientFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_defaulthttpclient_free(ptr, 0);
+    }
+    constructor() {
+        const ret = wasm.defaulthttpclient_new();
+        this.__wbg_ptr = ret >>> 0;
+        DefaultHttpClientFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * @param {Request} request
+     * @returns {Promise<Response>}
+     */
+    send(request) {
+        const ret = wasm.defaulthttpclient_send(this.__wbg_ptr, request);
+        return ret;
+    }
+}
+
+const DelegateTokenFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_delegatetoken_free(ptr >>> 0, 1));
+
+export class DelegateToken {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(DelegateToken.prototype);
+        obj.__wbg_ptr = ptr;
+        DelegateTokenFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        DelegateTokenFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_delegatetoken_free(ptr, 0);
+    }
+    /**
+     * @param {ControllerCap} controller_cap
+     * @param {string} recipient
+     * @param {DelegatePermissions | undefined | null} permissions
+     */
+    constructor(controller_cap, recipient, permissions) {
+        _assertClass(controller_cap, ControllerCap);
+        const ptr0 = passStringToWasm0(recipient, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.delegatetoken_new(controller_cap.__wbg_ptr, ptr0, len0, isLikeNone(permissions) ? 0x100000001 : (permissions) >>> 0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        this.__wbg_ptr = ret[0] >>> 0;
+        DelegateTokenFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * @param {IdentityClientReadOnly} client
+     * @returns {Promise<Uint8Array>}
+     */
+    buildProgrammableTransaction(client) {
+        _assertClass(client, IdentityClientReadOnly);
+        const ret = wasm.delegatetoken_buildProgrammableTransaction(this.__wbg_ptr, client.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {TransactionEffects} wasm_effects
+     * @param {IdentityClientReadOnly} client
+     * @returns {Promise<DelegationToken>}
+     */
+    apply(wasm_effects, client) {
+        const ptr = this.__destroy_into_raw();
+        _assertClass(client, IdentityClientReadOnly);
+        const ret = wasm.delegatetoken_apply(ptr, wasm_effects, client.__wbg_ptr);
+        return ret;
+    }
+}
+
+const DelegationTokenFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_delegationtoken_free(ptr >>> 0, 1));
+/**
+ * A token minted by a controller that allows another entity to act in
+ * its stead - with full or reduced permissions.
+ */
+export class DelegationToken {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(DelegationToken.prototype);
+        obj.__wbg_ptr = ptr;
+        DelegationTokenFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        DelegationTokenFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_delegationtoken_free(ptr, 0);
+    }
+    /**
+     * Returns the ID of this {@link DelegationToken}.
+     * @returns {string}
+     */
+    get id() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.delegationtoken_id(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * Returns the ID of the {@link ControllerCap} that minted
+     * this {@link DelegationToken}.
+     * @returns {string}
+     */
+    get controller() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.delegationtoken_controller(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * Returns the ID of the object this token controls.
+     * @returns {string}
+     */
+    get controllerOf() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.delegationtoken_controllerOf(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * Returns the permissions of this token.
+     * @returns {DelegatePermissions}
+     */
+    get permissions() {
+        const ret = wasm.delegationtoken_permissions(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+}
+
+const DelegationTokenRevocationFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_delegationtokenrevocation_free(ptr >>> 0, 1));
+/**
+ * Transaction for revoking / unrevoking a {@link DelegationToken}.
+ * If no `revoke` parameter is passed, or `true` is passed, this transaction
+ * will *revoke* the passed token - *unrevoke* otherwise.
+ */
+export class DelegationTokenRevocation {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(DelegationTokenRevocation.prototype);
+        obj.__wbg_ptr = ptr;
+        DelegationTokenRevocationFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        DelegationTokenRevocationFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_delegationtokenrevocation_free(ptr, 0);
+    }
+    /**
+     * @param {OnChainIdentity} identity
+     * @param {ControllerCap} controller_cap
+     * @param {DelegationToken} delegation_token
+     * @param {boolean | null} [revoke]
+     */
+    constructor(identity, controller_cap, delegation_token, revoke) {
+        _assertClass(identity, OnChainIdentity);
+        _assertClass(controller_cap, ControllerCap);
+        _assertClass(delegation_token, DelegationToken);
+        const ret = wasm.delegationtokenrevocation_new(identity.__wbg_ptr, controller_cap.__wbg_ptr, delegation_token.__wbg_ptr, isLikeNone(revoke) ? 0xFFFFFF : revoke ? 1 : 0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        this.__wbg_ptr = ret[0] >>> 0;
+        DelegationTokenRevocationFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * Returns whether this transaction will revoke the given token.
+     * @returns {boolean}
+     */
+    isRevocation() {
+        const ret = wasm.delegationtokenrevocation_isRevocation(this.__wbg_ptr);
+        return ret !== 0;
+    }
+    /**
+     * Returns the ID of the token handled by this transaction.
+     * @returns {string}
+     */
+    tokenId() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.delegationtokenrevocation_tokenId(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @param {IdentityClientReadOnly} client
+     * @returns {Promise<Uint8Array>}
+     */
+    buildProgrammableTransaction(client) {
+        _assertClass(client, IdentityClientReadOnly);
+        const ret = wasm.delegationtokenrevocation_buildProgrammableTransaction(this.__wbg_ptr, client.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {TransactionEffects} wasm_effects
+     * @param {IdentityClientReadOnly} client
+     * @returns {Promise<void>}
+     */
+    apply(wasm_effects, client) {
+        const ptr = this.__destroy_into_raw();
+        _assertClass(client, IdentityClientReadOnly);
+        const ret = wasm.delegationtokenrevocation_apply(ptr, wasm_effects, client.__wbg_ptr);
+        return ret;
+    }
+}
+
+const DeleteDelegationTokenFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_deletedelegationtoken_free(ptr >>> 0, 1));
+/**
+ * A transaction to delete a given {@link DelegationToken}.
+ */
+export class DeleteDelegationToken {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(DeleteDelegationToken.prototype);
+        obj.__wbg_ptr = ptr;
+        DeleteDelegationTokenFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        DeleteDelegationTokenFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_deletedelegationtoken_free(ptr, 0);
+    }
+    /**
+     * @param {OnChainIdentity} identity
+     * @param {DelegationToken} delegation_token
+     */
+    constructor(identity, delegation_token) {
+        _assertClass(identity, OnChainIdentity);
+        _assertClass(delegation_token, DelegationToken);
+        var ptr0 = delegation_token.__destroy_into_raw();
+        const ret = wasm.deletedelegationtoken_new(identity.__wbg_ptr, ptr0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        this.__wbg_ptr = ret[0] >>> 0;
+        DeleteDelegationTokenFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * @returns {string}
+     */
+    tokenId() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.deletedelegationtoken_tokenId(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @param {IdentityClientReadOnly} client
+     * @returns {Promise<Uint8Array>}
+     */
+    buildProgrammableTransaction(client) {
+        _assertClass(client, IdentityClientReadOnly);
+        const ret = wasm.deletedelegationtoken_buildProgrammableTransaction(this.__wbg_ptr, client.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {TransactionEffects} wasm_effects
+     * @param {IdentityClientReadOnly} client
+     * @returns {Promise<void>}
+     */
+    apply(wasm_effects, client) {
+        const ptr = this.__destroy_into_raw();
+        _assertClass(client, IdentityClientReadOnly);
+        const ret = wasm.deletedelegationtoken_apply(ptr, wasm_effects, client.__wbg_ptr);
+        return ret;
+    }
+}
+
 const DisclosureFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_disclosure_free(ptr >>> 0, 1));
@@ -3454,6 +5486,797 @@ export class EdDSAJwsVerifier {
     }
 }
 
+const ExecuteBorrowProposalFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_executeborrowproposal_free(ptr >>> 0, 1));
+
+export class ExecuteBorrowProposal {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(ExecuteBorrowProposal.prototype);
+        obj.__wbg_ptr = ptr;
+        ExecuteBorrowProposalFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ExecuteBorrowProposalFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_executeborrowproposal_free(ptr, 0);
+    }
+    /**
+     * @param {BorrowProposal} proposal
+     * @param {OnChainIdentity} identity
+     * @param {ControllerToken} controller_token
+     * @returns {ExecuteBorrowProposal}
+     */
+    static new(proposal, identity, controller_token) {
+        _assertClass(proposal, BorrowProposal);
+        var ptr0 = proposal.__destroy_into_raw();
+        _assertClass(identity, OnChainIdentity);
+        _assertClass(controller_token, ControllerToken);
+        const ret = wasm.executeborrowproposal_new(ptr0, identity.__wbg_ptr, controller_token.__wbg_ptr);
+        return ExecuteBorrowProposal.__wrap(ret);
+    }
+    /**
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<Uint8Array>}
+     */
+    buildProgrammableTransaction(client) {
+        const ret = wasm.executeborrowproposal_buildProgrammableTransaction(this.__wbg_ptr, client);
+        return ret;
+    }
+    /**
+     * @param {TransactionEffects} wasm_effects
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<void>}
+     */
+    apply(wasm_effects, client) {
+        const ptr = this.__destroy_into_raw();
+        const ret = wasm.executeborrowproposal_apply(ptr, wasm_effects, client);
+        return ret;
+    }
+}
+
+const ExecuteConfigChangeProposalFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_executeconfigchangeproposal_free(ptr >>> 0, 1));
+
+export class ExecuteConfigChangeProposal {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(ExecuteConfigChangeProposal.prototype);
+        obj.__wbg_ptr = ptr;
+        ExecuteConfigChangeProposalFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ExecuteConfigChangeProposalFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_executeconfigchangeproposal_free(ptr, 0);
+    }
+    /**
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<Uint8Array>}
+     */
+    buildProgrammableTransaction(client) {
+        const ret = wasm.executeconfigchangeproposal_buildProgrammableTransaction(this.__wbg_ptr, client);
+        return ret;
+    }
+    /**
+     * @param {TransactionEffects} wasm_effects
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<void>}
+     */
+    apply(wasm_effects, client) {
+        const ret = wasm.executeconfigchangeproposal_apply(this.__wbg_ptr, wasm_effects, client);
+        return ret;
+    }
+}
+
+const ExecuteControllerExecutionProposalFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_executecontrollerexecutionproposal_free(ptr >>> 0, 1));
+
+export class ExecuteControllerExecutionProposal {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(ExecuteControllerExecutionProposal.prototype);
+        obj.__wbg_ptr = ptr;
+        ExecuteControllerExecutionProposalFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ExecuteControllerExecutionProposalFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_executecontrollerexecutionproposal_free(ptr, 0);
+    }
+    /**
+     * @param {ControllerExecutionProposal} proposal
+     * @param {OnChainIdentity} identity
+     * @param {ControllerToken} controller_token
+     * @returns {ExecuteControllerExecutionProposal}
+     */
+    static new(proposal, identity, controller_token) {
+        _assertClass(proposal, ControllerExecutionProposal);
+        var ptr0 = proposal.__destroy_into_raw();
+        _assertClass(identity, OnChainIdentity);
+        _assertClass(controller_token, ControllerToken);
+        const ret = wasm.executecontrollerexecutionproposal_new(ptr0, identity.__wbg_ptr, controller_token.__wbg_ptr);
+        return ExecuteControllerExecutionProposal.__wrap(ret);
+    }
+    /**
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<Uint8Array>}
+     */
+    buildProgrammableTransaction(client) {
+        const ret = wasm.executecontrollerexecutionproposal_buildProgrammableTransaction(this.__wbg_ptr, client);
+        return ret;
+    }
+    /**
+     * @param {TransactionEffects} wasm_effects
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<void>}
+     */
+    apply(wasm_effects, client) {
+        const ptr = this.__destroy_into_raw();
+        const ret = wasm.executecontrollerexecutionproposal_apply(ptr, wasm_effects, client);
+        return ret;
+    }
+}
+
+const ExecuteSendProposalFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_executesendproposal_free(ptr >>> 0, 1));
+
+export class ExecuteSendProposal {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(ExecuteSendProposal.prototype);
+        obj.__wbg_ptr = ptr;
+        ExecuteSendProposalFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ExecuteSendProposalFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_executesendproposal_free(ptr, 0);
+    }
+    /**
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<Uint8Array>}
+     */
+    buildProgrammableTransaction(client) {
+        const ptr = this.__destroy_into_raw();
+        const ret = wasm.executesendproposal_buildProgrammableTransaction(ptr, client);
+        return ret;
+    }
+    /**
+     * @param {TransactionEffects} wasm_effects
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<void>}
+     */
+    apply(wasm_effects, client) {
+        const ptr = this.__destroy_into_raw();
+        const ret = wasm.executesendproposal_apply(ptr, wasm_effects, client);
+        return ret;
+    }
+}
+
+const ExecuteUpdateDidProposalFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_executeupdatedidproposal_free(ptr >>> 0, 1));
+
+export class ExecuteUpdateDidProposal {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(ExecuteUpdateDidProposal.prototype);
+        obj.__wbg_ptr = ptr;
+        ExecuteUpdateDidProposalFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ExecuteUpdateDidProposalFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_executeupdatedidproposal_free(ptr, 0);
+    }
+    /**
+     * @param {UpdateDidProposal} proposal
+     * @param {OnChainIdentity} identity
+     * @param {ControllerToken} controller_token
+     * @returns {ExecuteUpdateDidProposal}
+     */
+    static new(proposal, identity, controller_token) {
+        _assertClass(proposal, UpdateDidProposal);
+        var ptr0 = proposal.__destroy_into_raw();
+        _assertClass(identity, OnChainIdentity);
+        _assertClass(controller_token, ControllerToken);
+        const ret = wasm.executeupdatedidproposal_new(ptr0, identity.__wbg_ptr, controller_token.__wbg_ptr);
+        return ExecuteUpdateDidProposal.__wrap(ret);
+    }
+    /**
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<Uint8Array>}
+     */
+    buildProgrammableTransaction(client) {
+        const ret = wasm.executeupdatedidproposal_buildProgrammableTransaction(this.__wbg_ptr, client);
+        return ret;
+    }
+    /**
+     * @param {TransactionEffects} wasm_effects
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<void>}
+     */
+    apply(wasm_effects, client) {
+        const ptr = this.__destroy_into_raw();
+        const ret = wasm.executeupdatedidproposal_apply(ptr, wasm_effects, client);
+        return ret;
+    }
+}
+
+const GasStationParamsFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_gasstationparams_free(ptr >>> 0, 1));
+
+export class GasStationParams {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(GasStationParams.prototype);
+        obj.__wbg_ptr = ptr;
+        GasStationParamsFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        GasStationParamsFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_gasstationparams_free(ptr, 0);
+    }
+    /**
+     * @param {GasStationParamsI | null} [params]
+     */
+    constructor(params) {
+        const ret = wasm.gasstationparams_new(isLikeNone(params) ? 0 : addToExternrefTable0(params));
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        this.__wbg_ptr = ret[0] >>> 0;
+        GasStationParamsFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * Adds an `Authorization` header using `token` as a bearer token.
+     * @param {string} token
+     * @returns {GasStationParams}
+     */
+    withAuthToken(token) {
+        const ptr0 = passStringToWasm0(token, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.gasstationparams_withAuthToken(this.__wbg_ptr, ptr0, len0);
+        return GasStationParams.__wrap(ret);
+    }
+    /**
+     * @returns {bigint}
+     */
+    get gasReservationDuration() {
+        const ret = wasm.gasstationparams_gasReservationDuration(this.__wbg_ptr);
+        return BigInt.asUintN(64, ret);
+    }
+    /**
+     * @returns {HeaderMap}
+     */
+    get headers() {
+        const ret = wasm.gasstationparams_headers(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+}
+
+const IdentityFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_identity_free(ptr >>> 0, 1));
+
+export class Identity {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(Identity.prototype);
+        obj.__wbg_ptr = ptr;
+        IdentityFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        IdentityFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_identity_free(ptr, 0);
+    }
+    /**
+     * TODO: check if we can actually do this like this w/o consuming the container on the 1st try
+     * TODO: add support for unmigrated aliases
+     * @returns {OnChainIdentity | undefined}
+     */
+    toFullFledged() {
+        const ret = wasm.identity_toFullFledged(this.__wbg_ptr);
+        return ret === 0 ? undefined : OnChainIdentity.__wrap(ret);
+    }
+}
+
+const IdentityBuilderFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_identitybuilder_free(ptr >>> 0, 1));
+
+export class IdentityBuilder {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(IdentityBuilder.prototype);
+        obj.__wbg_ptr = ptr;
+        IdentityBuilderFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        IdentityBuilderFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_identitybuilder_free(ptr, 0);
+    }
+    /**
+     * @param {IotaDocument} did_doc
+     */
+    constructor(did_doc) {
+        _assertClass(did_doc, IotaDocument);
+        const ret = wasm.identitybuilder_new(did_doc.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        this.__wbg_ptr = ret[0] >>> 0;
+        IdentityBuilderFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * @param {string} address
+     * @param {bigint} voting_power
+     * @param {boolean | null} [can_delegate]
+     * @returns {IdentityBuilder}
+     */
+    controller(address, voting_power, can_delegate) {
+        const ptr = this.__destroy_into_raw();
+        const ptr0 = passStringToWasm0(address, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.identitybuilder_controller(ptr, ptr0, len0, voting_power, isLikeNone(can_delegate) ? 0xFFFFFF : can_delegate ? 1 : 0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return IdentityBuilder.__wrap(ret[0]);
+    }
+    /**
+     * @param {bigint} threshold
+     * @returns {IdentityBuilder}
+     */
+    threshold(threshold) {
+        const ptr = this.__destroy_into_raw();
+        const ret = wasm.identitybuilder_threshold(ptr, threshold);
+        return IdentityBuilder.__wrap(ret);
+    }
+    /**
+     * @param {ControllerAndVotingPower[]} controllers
+     * @returns {IdentityBuilder}
+     */
+    controllers(controllers) {
+        const ptr = this.__destroy_into_raw();
+        const ptr0 = passArrayJsValueToWasm0(controllers, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.identitybuilder_controllers(ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return IdentityBuilder.__wrap(ret[0]);
+    }
+    /**
+     * @returns {TransactionBuilder<CreateIdentity>}
+     */
+    finish() {
+        const ptr = this.__destroy_into_raw();
+        const ret = wasm.identitybuilder_finish(ptr);
+        return TransactionBuilder.__wrap(ret);
+    }
+}
+
+const IdentityClientFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_identityclient_free(ptr >>> 0, 1));
+/**
+ * A client to interact with identities on the IOTA chain.
+ *
+ * Used for read and write operations. If you just want read capabilities,
+ * you can also use {@link IdentityClientReadOnly}, which does not need an account and signing capabilities.
+ */
+export class IdentityClient {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(IdentityClient.prototype);
+        obj.__wbg_ptr = ptr;
+        IdentityClientFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        IdentityClientFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_identityclient_free(ptr, 0);
+    }
+    /**
+     * @deprecated Use `IdentityClient.create` instead.
+     */
+    constructor() {
+        const ret = wasm.identityclient__new();
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        this.__wbg_ptr = ret[0] >>> 0;
+        IdentityClientFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * @param {IdentityClientReadOnly} client
+     * @param {TransactionSigner} signer
+     * @returns {Promise<IdentityClient>}
+     */
+    static create(client, signer) {
+        _assertClass(client, IdentityClientReadOnly);
+        var ptr0 = client.__destroy_into_raw();
+        const ret = wasm.identityclient_create(ptr0, signer);
+        return ret;
+    }
+    /**
+     * @returns {PublicKey}
+     */
+    senderPublicKey() {
+        const ret = wasm.identityclient_senderPublicKey(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * @returns {string}
+     */
+    senderAddress() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.identityclient_senderAddress(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @returns {string}
+     */
+    network() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.identityclient_network(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @param {IotaDocument} iota_document
+     * @returns {IdentityBuilder}
+     */
+    createIdentity(iota_document) {
+        _assertClass(iota_document, IotaDocument);
+        const ret = wasm.identityclient_createIdentity(this.__wbg_ptr, iota_document.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return IdentityBuilder.__wrap(ret[0]);
+    }
+    /**
+     * @param {string} object_id
+     * @returns {Promise<Identity>}
+     */
+    getIdentity(object_id) {
+        const ptr0 = passStringToWasm0(object_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.identityclient_getIdentity(this.__wbg_ptr, ptr0, len0);
+        return ret;
+    }
+    /**
+     * @returns {string}
+     */
+    packageId() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.identityclient_packageId(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @returns {string[]}
+     */
+    packageHistory() {
+        const ret = wasm.identityclient_packageHistory(this.__wbg_ptr);
+        var v1 = getArrayJsValueFromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
+     * @param {IotaDID} did
+     * @returns {Promise<IotaDocument>}
+     */
+    resolveDid(did) {
+        _assertClass(did, IotaDID);
+        const ret = wasm.identityclient_resolveDid(this.__wbg_ptr, did.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {IotaDocument} document
+     * @param {string} controller
+     * @returns {TransactionBuilder<PublishDidDocument>}
+     */
+    publishDidDocument(document, controller) {
+        _assertClass(document, IotaDocument);
+        const ptr0 = passStringToWasm0(controller, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.identityclient_publishDidDocument(this.__wbg_ptr, document.__wbg_ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return TransactionBuilder.__wrap(ret[0]);
+    }
+    /**
+     * @param {IotaDocument} document
+     * @param {bigint} gas_budget
+     * @returns {Promise<IotaDocument>}
+     */
+    publishDidDocumentUpdate(document, gas_budget) {
+        _assertClass(document, IotaDocument);
+        const ret = wasm.identityclient_publishDidDocumentUpdate(this.__wbg_ptr, document.__wbg_ptr, gas_budget);
+        return ret;
+    }
+    /**
+     * @param {IotaDID} did
+     * @param {bigint} gas_budget
+     * @returns {Promise<void>}
+     */
+    deactivateDidOutput(did, gas_budget) {
+        _assertClass(did, IotaDID);
+        const ret = wasm.identityclient_deactivateDidOutput(this.__wbg_ptr, did.__wbg_ptr, gas_budget);
+        return ret;
+    }
+    /**
+     * @returns {IotaClient}
+     */
+    iotaClient() {
+        const ret = wasm.identityclient_iotaClient(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {TransactionSigner}
+     */
+    signer() {
+        const ret = wasm.identityclient_signer(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {IdentityClientReadOnly}
+     */
+    readOnly() {
+        const ret = wasm.identityclient_readOnly(this.__wbg_ptr);
+        return IdentityClientReadOnly.__wrap(ret);
+    }
+}
+
+const IdentityClientReadOnlyFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_identityclientreadonly_free(ptr >>> 0, 1));
+/**
+ * A client to interact with identities on the IOTA chain.
+ *
+ * Used for read operations, so does not need an account and signing capabilities.
+ * If you want to write to the chain, use {@link IdentityClient}.
+ */
+export class IdentityClientReadOnly {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(IdentityClientReadOnly.prototype);
+        obj.__wbg_ptr = ptr;
+        IdentityClientReadOnlyFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        IdentityClientReadOnlyFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_identityclientreadonly_free(ptr, 0);
+    }
+    /**
+     * @deprecated Use `IdentityClientReadOnly.create` instead.
+     */
+    constructor() {
+        const ret = wasm.identityclientreadonly__new();
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        this.__wbg_ptr = ret[0] >>> 0;
+        IdentityClientReadOnlyFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * @param {IotaClient} iota_client
+     * @returns {Promise<IdentityClientReadOnly>}
+     */
+    static create(iota_client) {
+        const ret = wasm.identityclientreadonly_create(iota_client);
+        return ret;
+    }
+    /**
+     * @param {IotaClient} iota_client
+     * @param {string} iota_identity_pkg_id
+     * @returns {Promise<IdentityClientReadOnly>}
+     */
+    static createWithPkgId(iota_client, iota_identity_pkg_id) {
+        const ptr0 = passStringToWasm0(iota_identity_pkg_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.identityclientreadonly_createWithPkgId(iota_client, ptr0, len0);
+        return ret;
+    }
+    /**
+     * @returns {string}
+     */
+    packageId() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.identityclientreadonly_packageId(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @returns {string[]}
+     */
+    packageHistory() {
+        const ret = wasm.identityclientreadonly_packageHistory(this.__wbg_ptr);
+        var v1 = getArrayJsValueFromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
+     * @returns {IotaClient}
+     */
+    iotaClient() {
+        const ret = wasm.identityclientreadonly_iotaClient(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {string}
+     */
+    network() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.identityclientreadonly_network(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @param {IotaDID} did
+     * @returns {Promise<IotaDocument>}
+     */
+    resolveDid(did) {
+        _assertClass(did, IotaDID);
+        const ret = wasm.identityclientreadonly_resolveDid(this.__wbg_ptr, did.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {string} object_id
+     * @returns {Promise<Identity>}
+     */
+    getIdentity(object_id) {
+        const ptr0 = passStringToWasm0(object_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.identityclientreadonly_getIdentity(this.__wbg_ptr, ptr0, len0);
+        return ret;
+    }
+}
+
 const IotaDIDFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_iotadid_free(ptr >>> 0, 1));
@@ -3550,12 +6373,12 @@ export class IotaDID {
     /**
      * Constructs a new {@link IotaDID} from a hex representation of an Alias Id and the given
      * network name.
-     * @param {string} aliasId
+     * @param {string} objectId
      * @param {string} network
      * @returns {IotaDID}
      */
-    static fromAliasId(aliasId, network) {
-        const ptr0 = passStringToWasm0(aliasId, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    static fromAliasId(objectId, network) {
+        const ptr0 = passStringToWasm0(objectId, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len1 = WASM_VECTOR_LEN;
@@ -4131,7 +6954,7 @@ export class IotaDocument {
         return DecodedJws.__wrap(ret[0]);
     }
     /**
-     * Serializes the document for inclusion in an Alias Output's state metadata
+     * Serializes the document for inclusion in an identity's metadata
      * with the default {@link StateMetadataEncoding}.
      * @returns {Uint8Array}
      */
@@ -4145,7 +6968,7 @@ export class IotaDocument {
         return v1;
     }
     /**
-     * Serializes the document for inclusion in an Alias Output's state metadata.
+     * Serializes the document for inclusion in an identity's metadata.
      * @param {StateMetadataEncoding} encoding
      * @returns {Uint8Array}
      */
@@ -4157,48 +6980,6 @@ export class IotaDocument {
         var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
         return v1;
-    }
-    /**
-     * Deserializes the document from an Alias Output.
-     *
-     * If `allowEmpty` is true, this will return an empty DID document marked as `deactivated`
-     * if `stateMetadata` is empty.
-     *
-     * The `tokenSupply` must be equal to the token supply of the network the DID is associated with.
-     *
-     * NOTE: `did` is required since it is omitted from the serialized DID Document and
-     * cannot be inferred from the state metadata. It also indicates the network, which is not
-     * encoded in the `AliasId` alone.
-     * @param {IotaDID} did
-     * @param {AliasOutputBuilderParams} aliasOutput
-     * @param {boolean} allowEmpty
-     * @returns {IotaDocument}
-     */
-    static unpackFromOutput(did, aliasOutput, allowEmpty) {
-        _assertClass(did, IotaDID);
-        const ret = wasm.iotadocument_unpackFromOutput(did.__wbg_ptr, aliasOutput, allowEmpty);
-        if (ret[2]) {
-            throw takeFromExternrefTable0(ret[1]);
-        }
-        return IotaDocument.__wrap(ret[0]);
-    }
-    /**
-     * Returns all DID documents of the Alias Outputs contained in the block's transaction payload
-     * outputs, if any.
-     *
-     * Errors if any Alias Output does not contain a valid or empty DID Document.
-     * @param {string} network
-     * @param {Block} block
-     * @returns {IotaDocument[]}
-     */
-    static unpackFromBlock(network, block) {
-        const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.iotadocument_unpackFromBlock(ptr0, len0, block);
-        if (ret[2]) {
-            throw takeFromExternrefTable0(ret[1]);
-        }
-        return takeFromExternrefTable0(ret[0]);
     }
     /**
      * Returns a copy of the metadata associated with this document.
@@ -4276,38 +7057,6 @@ export class IotaDocument {
         if (ret[1]) {
             throw takeFromExternrefTable0(ret[0]);
         }
-    }
-    /**
-     * Returns a copy of the Bech32-encoded state controller address, if present.
-     * @returns {string | undefined}
-     */
-    metadataStateControllerAddress() {
-        const ret = wasm.iotadocument_metadataStateControllerAddress(this.__wbg_ptr);
-        if (ret[3]) {
-            throw takeFromExternrefTable0(ret[2]);
-        }
-        let v1;
-        if (ret[0] !== 0) {
-            v1 = getStringFromWasm0(ret[0], ret[1]).slice();
-            wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-        }
-        return v1;
-    }
-    /**
-     * Returns a copy of the Bech32-encoded governor address, if present.
-     * @returns {string | undefined}
-     */
-    metadataGovernorAddress() {
-        const ret = wasm.iotadocument_metadataGovernorAddress(this.__wbg_ptr);
-        if (ret[3]) {
-            throw takeFromExternrefTable0(ret[2]);
-        }
-        let v1;
-        if (ret[0] !== 0) {
-            v1 = getStringFromWasm0(ret[0], ret[1]).slice();
-            wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-        }
-        return v1;
     }
     /**
      * Sets a custom property in the document metadata.
@@ -4724,32 +7473,6 @@ export class IotaDocumentMetadata {
         return ret === 0xFFFFFF ? undefined : ret !== 0;
     }
     /**
-     * Returns a copy of the Bech32-encoded state controller address, if present.
-     * @returns {string | undefined}
-     */
-    stateControllerAddress() {
-        const ret = wasm.iotadocumentmetadata_stateControllerAddress(this.__wbg_ptr);
-        let v1;
-        if (ret[0] !== 0) {
-            v1 = getStringFromWasm0(ret[0], ret[1]).slice();
-            wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-        }
-        return v1;
-    }
-    /**
-     * Returns a copy of the Bech32-encoded governor address, if present.
-     * @returns {string | undefined}
-     */
-    governorAddress() {
-        const ret = wasm.iotadocumentmetadata_governorAddress(this.__wbg_ptr);
-        let v1;
-        if (ret[0] !== 0) {
-            v1 = getStringFromWasm0(ret[0], ret[1]).slice();
-            wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-        }
-        return v1;
-    }
-    /**
      * Returns a copy of the custom metadata properties.
      * @returns {Map<string, any>}
      */
@@ -4793,116 +7516,104 @@ export class IotaDocumentMetadata {
     }
 }
 
-const IotaIdentityClientExtFinalization = (typeof FinalizationRegistry === 'undefined')
+const IotaTransactionBlockResponseEssenceFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_iotaidentityclientext_free(ptr >>> 0, 1));
-/**
- * An extension interface that provides helper functions for publication
- * and resolution of DID documents in Alias Outputs.
- */
-export class IotaIdentityClientExt {
+    : new FinalizationRegistry(ptr => wasm.__wbg_iotatransactionblockresponseessence_free(ptr >>> 0, 1));
+
+export class IotaTransactionBlockResponseEssence {
+
+    toJSON() {
+        return {
+            effectsExist: this.effectsExist,
+            effects: this.effects,
+            effectsExecutionStatus: this.effectsExecutionStatus,
+            effectsCreated: this.effectsCreated,
+        };
+    }
+
+    toString() {
+        return JSON.stringify(this);
+    }
 
     __destroy_into_raw() {
         const ptr = this.__wbg_ptr;
         this.__wbg_ptr = 0;
-        IotaIdentityClientExtFinalization.unregister(this);
+        IotaTransactionBlockResponseEssenceFinalization.unregister(this);
         return ptr;
     }
 
     free() {
         const ptr = this.__destroy_into_raw();
-        wasm.__wbg_iotaidentityclientext_free(ptr, 0);
+        wasm.__wbg_iotatransactionblockresponseessence_free(ptr, 0);
     }
     /**
-     * Create a DID with a new Alias Output containing the given `document`.
-     *
-     * The `address` will be set as the state controller and governor unlock conditions.
-     * The minimum required token deposit amount will be set according to the given
-     * `rent_structure`, which will be fetched from the node if not provided.
-     * The returned Alias Output can be further customised before publication, if desired.
-     *
-     * NOTE: this does *not* publish the Alias Output.
-     * @param {IIotaIdentityClient} client
-     * @param {Address} address
-     * @param {IotaDocument} document
-     * @param {IRent | null} [rentStructure]
-     * @returns {Promise<AliasOutputBuilderParams>}
+     * @returns {boolean}
      */
-    static newDidOutput(client, address, document, rentStructure) {
-        _assertClass(document, IotaDocument);
-        const ret = wasm.iotaidentityclientext_newDidOutput(client, address, document.__wbg_ptr, isLikeNone(rentStructure) ? 0 : addToExternrefTable0(rentStructure));
-        if (ret[2]) {
-            throw takeFromExternrefTable0(ret[1]);
-        }
-        return takeFromExternrefTable0(ret[0]);
+    get effectsExist() {
+        const ret = wasm.__wbg_get_iotatransactionblockresponseessence_effectsExist(this.__wbg_ptr);
+        return ret !== 0;
     }
     /**
-     * Fetches the associated Alias Output and updates it with `document` in its state metadata.
-     * The storage deposit on the output is left unchanged. If the size of the document increased,
-     * the amount should be increased manually.
-     *
-     * NOTE: this does *not* publish the updated Alias Output.
-     * @param {IIotaIdentityClient} client
-     * @param {IotaDocument} document
-     * @returns {Promise<AliasOutputBuilderParams>}
+     * @param {boolean} arg0
      */
-    static updateDidOutput(client, document) {
-        _assertClass(document, IotaDocument);
-        const ret = wasm.iotaidentityclientext_updateDidOutput(client, document.__wbg_ptr);
-        if (ret[2]) {
-            throw takeFromExternrefTable0(ret[1]);
-        }
-        return takeFromExternrefTable0(ret[0]);
+    set effectsExist(arg0) {
+        wasm.__wbg_set_iotatransactionblockresponseessence_effectsExist(this.__wbg_ptr, arg0);
     }
     /**
-     * Removes the DID document from the state metadata of its Alias Output,
-     * effectively deactivating it. The storage deposit on the output is left unchanged,
-     * and should be reallocated manually.
-     *
-     * Deactivating does not destroy the output. Hence, it can be re-activated by publishing
-     * an update containing a DID document.
-     *
-     * NOTE: this does *not* publish the updated Alias Output.
-     * @param {IIotaIdentityClient} client
-     * @param {IotaDID} did
-     * @returns {Promise<AliasOutputBuilderParams>}
+     * @returns {string}
      */
-    static deactivateDidOutput(client, did) {
-        _assertClass(did, IotaDID);
-        const ret = wasm.iotaidentityclientext_deactivateDidOutput(client, did.__wbg_ptr);
-        if (ret[2]) {
-            throw takeFromExternrefTable0(ret[1]);
+    get effects() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.__wbg_get_iotatransactionblockresponseessence_effects(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
         }
-        return takeFromExternrefTable0(ret[0]);
     }
     /**
-     * Resolve a {@link IotaDocument}. Returns an empty, deactivated document if the state metadata
-     * of the Alias Output is empty.
-     * @param {IIotaIdentityClient} client
-     * @param {IotaDID} did
-     * @returns {Promise<IotaDocument>}
+     * @param {string} arg0
      */
-    static resolveDid(client, did) {
-        _assertClass(did, IotaDID);
-        const ret = wasm.iotaidentityclientext_resolveDid(client, did.__wbg_ptr);
-        if (ret[2]) {
-            throw takeFromExternrefTable0(ret[1]);
-        }
-        return takeFromExternrefTable0(ret[0]);
+    set effects(arg0) {
+        const ptr0 = passStringToWasm0(arg0, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.__wbg_set_iotatransactionblockresponseessence_effects(this.__wbg_ptr, ptr0, len0);
     }
     /**
-     * Fetches the `IAliasOutput` associated with the given DID.
-     * @param {IIotaIdentityClient} client
-     * @param {IotaDID} did
-     * @returns {Promise<AliasOutputBuilderParams>}
+     * @returns {ExecutionStatus | undefined}
      */
-    static resolveDidOutput(client, did) {
-        _assertClass(did, IotaDID);
-        const ret = wasm.iotaidentityclientext_resolveDidOutput(client, did.__wbg_ptr);
-        if (ret[2]) {
-            throw takeFromExternrefTable0(ret[1]);
+    get effectsExecutionStatus() {
+        const ret = wasm.__wbg_get_iotatransactionblockresponseessence_effectsExecutionStatus(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {ExecutionStatus | null} [arg0]
+     */
+    set effectsExecutionStatus(arg0) {
+        wasm.__wbg_set_iotatransactionblockresponseessence_effectsExecutionStatus(this.__wbg_ptr, isLikeNone(arg0) ? 0 : addToExternrefTable0(arg0));
+    }
+    /**
+     * @returns {OwnedObjectRef[] | undefined}
+     */
+    get effectsCreated() {
+        const ret = wasm.__wbg_get_iotatransactionblockresponseessence_effectsCreated(this.__wbg_ptr);
+        let v1;
+        if (ret[0] !== 0) {
+            v1 = getArrayJsValueFromWasm0(ret[0], ret[1]).slice();
+            wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
         }
-        return takeFromExternrefTable0(ret[0]);
+        return v1;
+    }
+    /**
+     * @param {OwnedObjectRef[] | null} [arg0]
+     */
+    set effectsCreated(arg0) {
+        var ptr0 = isLikeNone(arg0) ? 0 : passArrayJsValueToWasm0(arg0, wasm.__wbindgen_malloc);
+        var len0 = WASM_VECTOR_LEN;
+        wasm.__wbg_set_iotatransactionblockresponseessence_effectsCreated(this.__wbg_ptr, ptr0, len0);
     }
 }
 
@@ -5597,7 +8308,11 @@ export class JptPresentationValidatorUtils {
 const JwkFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_jwk_free(ptr >>> 0, 1));
-
+/**
+ * JSON Web Key.
+ *
+ * [More Info](https://tools.ietf.org/html/rfc7517#section-4)
+ */
 export class Jwk {
 
     static __wrap(ptr) {
@@ -5671,6 +8386,15 @@ export class Jwk {
             wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
         }
         return v1;
+    }
+    /**
+     * Sets a value for the key ID property (kid).
+     * @param {string} kid
+     */
+    setKid(kid) {
+        const ptr0 = passStringToWasm0(kid, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.jwk_setKid(this.__wbg_ptr, ptr0, len0);
     }
     /**
      * Returns the value of the X.509 URL property (x5u).
@@ -5762,6 +8486,26 @@ export class Jwk {
             throw takeFromExternrefTable0(ret[1]);
         }
         return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Creates a Thumbprint of the JSON Web Key according to [RFC7638](https://tools.ietf.org/html/rfc7638).
+     *
+     * `SHA2-256` is used as the hash function *H*.
+     *
+     * The thumbprint is returned as a base64url-encoded string.
+     * @returns {string}
+     */
+    thumbprintSha256B64() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.jwk_thumbprintSha256B64(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
     }
     /**
      * Returns a clone of the {@link Jwk} with _all_ private key components unset.
@@ -6280,7 +9024,9 @@ export class JwpPresentationOptions {
 const JwpVerificationOptionsFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_jwpverificationoptions_free(ptr >>> 0, 1));
-
+/**
+ * Holds additional options for verifying a JWP
+ */
 export class JwpVerificationOptions {
 
     static __wrap(ptr) {
@@ -6804,7 +9550,9 @@ export class JwsHeader {
 const JwsSignatureOptionsFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_jwssignatureoptions_free(ptr >>> 0, 1));
-
+/**
+ * Options for creating a JSON Web Signature.
+ */
 export class JwsSignatureOptions {
 
     static __wrap(ptr) {
@@ -6962,7 +9710,9 @@ export class JwsSignatureOptions {
 const JwsVerificationOptionsFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_jwsverificationoptions_free(ptr >>> 0, 1));
-
+/**
+ * Holds additional options for verifying a JWS with {@link CoreDocument.verifyJws}.
+ */
 export class JwsVerificationOptions {
 
     static __wrap(ptr) {
@@ -8241,7 +10991,10 @@ export class KeyBindingJwtClaims {
 const LinkedDomainServiceFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_linkeddomainservice_free(ptr >>> 0, 1));
-
+/**
+ * A service wrapper for a
+ * [Linked Domain Service Endpoint](https://identity.foundation/.well-known/resources/did-configuration/#linked-domain-service-endpoint).
+ */
 export class LinkedDomainService {
 
     static __wrap(ptr) {
@@ -8343,7 +11096,9 @@ export class LinkedDomainService {
 const LinkedVerifiablePresentationServiceFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_linkedverifiablepresentationservice_free(ptr >>> 0, 1));
-
+/**
+ * A service wrapper for a [Linked Verifiable Presentation Service Endpoint](https://identity.foundation/linked-vp/#linked-verifiable-presentation-service-endpoint).
+ */
 export class LinkedVerifiablePresentationService {
 
     static __wrap(ptr) {
@@ -8962,6 +11717,280 @@ export class MethodType {
     }
 }
 
+const OnChainIdentityFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_onchainidentity_free(ptr >>> 0, 1));
+
+export class OnChainIdentity {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(OnChainIdentity.prototype);
+        obj.__wbg_ptr = ptr;
+        OnChainIdentityFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        OnChainIdentityFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_onchainidentity_free(ptr, 0);
+    }
+    /**
+     * @param {string} id
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<OnChainIdentity>}
+     */
+    static getById(id, client) {
+        const ptr0 = passStringToWasm0(id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.onchainidentity_getById(ptr0, len0, client);
+        return ret;
+    }
+    /**
+     * @returns {string}
+     */
+    id() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.onchainidentity_id(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * @returns {IotaDocument}
+     */
+    didDocument() {
+        const ret = wasm.onchainidentity_didDocument(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return IotaDocument.__wrap(ret[0]);
+    }
+    /**
+     * Returns whether the {@link IotaDocument} contained in this {@link OnChainIdentity} has been deleted.
+     * Once a DID Document is deleted, it cannot be reactivated.
+     *
+     * When calling {@link OnChainIdentity.did_document} on an Identity whose DID Document
+     * had been deleted, an *empty* and *deactivated* {@link IotaDocument} will be returned.
+     * @returns {boolean}
+     */
+    hasDeletedDid() {
+        const ret = wasm.onchainidentity_hasDeletedDid(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0] !== 0;
+    }
+    /**
+     * @returns {boolean}
+     */
+    isShared() {
+        const ret = wasm.onchainidentity_isShared(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0] !== 0;
+    }
+    /**
+     * @param {IdentityClient} client
+     * @returns {Promise<ControllerToken | undefined>}
+     */
+    getControllerToken(client) {
+        _assertClass(client, IdentityClient);
+        const ret = wasm.onchainidentity_getControllerToken(this.__wbg_ptr, client.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {string} address
+     * @param {IdentityClient} client
+     * @returns {Promise<ControllerToken | undefined>}
+     */
+    getControllerTokenForAddress(address, client) {
+        const ptr0 = passStringToWasm0(address, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        _assertClass(client, IdentityClient);
+        const ret = wasm.onchainidentity_getControllerTokenForAddress(this.__wbg_ptr, ptr0, len0, client.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {any}
+     */
+    proposals() {
+        const ret = wasm.onchainidentity_proposals(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * @param {IotaDocument} updated_doc
+     * @param {ControllerToken} controller_token
+     * @param {bigint | null} [expiration_epoch]
+     * @returns {TransactionBuilder<CreateProposal<UpdateDid>>}
+     */
+    updateDidDocument(updated_doc, controller_token, expiration_epoch) {
+        _assertClass(updated_doc, IotaDocument);
+        _assertClass(controller_token, ControllerToken);
+        const ret = wasm.onchainidentity_updateDidDocument(this.__wbg_ptr, updated_doc.__wbg_ptr, controller_token.__wbg_ptr, !isLikeNone(expiration_epoch), isLikeNone(expiration_epoch) ? BigInt(0) : expiration_epoch);
+        return TransactionBuilder.__wrap(ret);
+    }
+    /**
+     * @param {ControllerToken} controller_token
+     * @param {bigint | null} [expiration_epoch]
+     * @returns {TransactionBuilder<CreateProposal<UpdateDid>>}
+     */
+    deactivateDid(controller_token, expiration_epoch) {
+        _assertClass(controller_token, ControllerToken);
+        const ret = wasm.onchainidentity_deactivateDid(this.__wbg_ptr, controller_token.__wbg_ptr, !isLikeNone(expiration_epoch), isLikeNone(expiration_epoch) ? BigInt(0) : expiration_epoch);
+        return TransactionBuilder.__wrap(ret);
+    }
+    /**
+     * @param {ControllerToken} controller_token
+     * @param {bigint | null} [expiration_epoch]
+     * @returns {TransactionBuilder<CreateProposal<UpdateDid>>}
+     */
+    deleteDid(controller_token, expiration_epoch) {
+        _assertClass(controller_token, ControllerToken);
+        const ret = wasm.onchainidentity_deleteDid(this.__wbg_ptr, controller_token.__wbg_ptr, !isLikeNone(expiration_epoch), isLikeNone(expiration_epoch) ? BigInt(0) : expiration_epoch);
+        return TransactionBuilder.__wrap(ret);
+    }
+    /**
+     * @param {ControllerToken} controller_token
+     * @param {ConfigChange} config
+     * @param {bigint | null} [expiration_epoch]
+     * @returns {TransactionBuilder<CreateProposal<ConfigChange>>}
+     */
+    updateConfig(controller_token, config, expiration_epoch) {
+        _assertClass(controller_token, ControllerToken);
+        _assertClass(config, ConfigChange);
+        var ptr0 = config.__destroy_into_raw();
+        const ret = wasm.onchainidentity_updateConfig(this.__wbg_ptr, controller_token.__wbg_ptr, ptr0, !isLikeNone(expiration_epoch), isLikeNone(expiration_epoch) ? BigInt(0) : expiration_epoch);
+        return TransactionBuilder.__wrap(ret);
+    }
+    /**
+     * @param {ControllerToken} controller_token
+     * @param {([string, string])[]} transfer_map
+     * @param {bigint | null} [expiration_epoch]
+     * @returns {TransactionBuilder<CreateProposal<SendAction>>}
+     */
+    sendAssets(controller_token, transfer_map, expiration_epoch) {
+        _assertClass(controller_token, ControllerToken);
+        const ptr0 = passArrayJsValueToWasm0(transfer_map, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.onchainidentity_sendAssets(this.__wbg_ptr, controller_token.__wbg_ptr, ptr0, len0, !isLikeNone(expiration_epoch), isLikeNone(expiration_epoch) ? BigInt(0) : expiration_epoch);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return TransactionBuilder.__wrap(ret[0]);
+    }
+    /**
+     * @param {ControllerCap} controller_cap
+     * @param {DelegationToken} delegation_token
+     * @returns {TransactionBuilder<DelegationTokenRevocation>}
+     */
+    revokeDelegationToken(controller_cap, delegation_token) {
+        _assertClass(controller_cap, ControllerCap);
+        _assertClass(delegation_token, DelegationToken);
+        const ret = wasm.onchainidentity_revokeDelegationToken(this.__wbg_ptr, controller_cap.__wbg_ptr, delegation_token.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return DelegationTokenRevocation.__wrap(ret[0]);
+    }
+    /**
+     * @param {ControllerCap} controller_cap
+     * @param {DelegationToken} delegation_token
+     * @returns {TransactionBuilder<DelegationTokenRevocation>}
+     */
+    unrevokeDelegationToken(controller_cap, delegation_token) {
+        _assertClass(controller_cap, ControllerCap);
+        _assertClass(delegation_token, DelegationToken);
+        const ret = wasm.onchainidentity_unrevokeDelegationToken(this.__wbg_ptr, controller_cap.__wbg_ptr, delegation_token.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return DelegationTokenRevocation.__wrap(ret[0]);
+    }
+    /**
+     * @param {DelegationToken} delegation_token
+     * @returns {TransactionBuilder<DeleteDelegationToken>}
+     */
+    deleteDelegationToken(delegation_token) {
+        _assertClass(delegation_token, DelegationToken);
+        var ptr0 = delegation_token.__destroy_into_raw();
+        const ret = wasm.onchainidentity_deleteDelegationToken(this.__wbg_ptr, ptr0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return DeleteDelegationToken.__wrap(ret[0]);
+    }
+    /**
+     * @param {ControllerToken} controller_token
+     * @param {string[]} objects
+     * @param {BorrowFn | null} [borrow_fn]
+     * @param {bigint | null} [expiration_epoch]
+     * @returns {TransactionBuilder<CreateProposal<Borrow>>}
+     */
+    borrowAssets(controller_token, objects, borrow_fn, expiration_epoch) {
+        _assertClass(controller_token, ControllerToken);
+        const ptr0 = passArrayJsValueToWasm0(objects, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.onchainidentity_borrowAssets(this.__wbg_ptr, controller_token.__wbg_ptr, ptr0, len0, isLikeNone(borrow_fn) ? 0 : addToExternrefTable0(borrow_fn), !isLikeNone(expiration_epoch), isLikeNone(expiration_epoch) ? BigInt(0) : expiration_epoch);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return TransactionBuilder.__wrap(ret[0]);
+    }
+    /**
+     * @param {ControllerToken} controller_token
+     * @param {string} controller_cap
+     * @param {ControllerExecutionFn | null} [exec_fn]
+     * @param {bigint | null} [expiration_epoch]
+     * @returns {TransactionBuilder<CreateProposal<ControllerExecution>>}
+     */
+    controllerExecution(controller_token, controller_cap, exec_fn, expiration_epoch) {
+        _assertClass(controller_token, ControllerToken);
+        const ptr0 = passStringToWasm0(controller_cap, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.onchainidentity_controllerExecution(this.__wbg_ptr, controller_token.__wbg_ptr, ptr0, len0, isLikeNone(exec_fn) ? 0 : addToExternrefTable0(exec_fn), !isLikeNone(expiration_epoch), isLikeNone(expiration_epoch) ? BigInt(0) : expiration_epoch);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return TransactionBuilder.__wrap(ret[0]);
+    }
+    /**
+     * @param {ControllerToken} controller_token
+     * @param {OnChainIdentity} sub_identity
+     * @param {SubAccessFn<unknown> | null} [sub_access_fn]
+     * @param {bigint | null} [expiration]
+     * @returns {TransactionBuilder}
+     */
+    accessSubIdentity(controller_token, sub_identity, sub_access_fn, expiration) {
+        _assertClass(controller_token, ControllerToken);
+        _assertClass(sub_identity, OnChainIdentity);
+        const ret = wasm.onchainidentity_accessSubIdentity(this.__wbg_ptr, controller_token.__wbg_ptr, sub_identity.__wbg_ptr, isLikeNone(sub_access_fn) ? 0 : addToExternrefTable0(sub_access_fn), !isLikeNone(expiration), isLikeNone(expiration) ? BigInt(0) : expiration);
+        return TransactionBuilder.__wrap(ret);
+    }
+}
+
 const PayloadEntryFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_payloadentry_free(ptr >>> 0, 1));
@@ -9178,7 +12207,9 @@ export class Payloads {
 const PresentationFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_presentation_free(ptr >>> 0, 1));
-
+/**
+ * Represents a bundle of one or more {@link Credential}s.
+ */
 export class Presentation {
 
     static __wrap(ptr) {
@@ -9467,7 +12498,7 @@ export class PresentationProtectedHeader {
     set kid(arg0) {
         var ptr0 = isLikeNone(arg0) ? 0 : passStringToWasm0(arg0, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         var len0 = WASM_VECTOR_LEN;
-        wasm.__wbg_set_jwppresentationoptions_audience(this.__wbg_ptr, ptr0, len0);
+        wasm.__wbg_set_presentationprotectedheader_kid(this.__wbg_ptr, ptr0, len0);
     }
     /**
      * Who have received the JPT.
@@ -9489,7 +12520,7 @@ export class PresentationProtectedHeader {
     set aud(arg0) {
         var ptr0 = isLikeNone(arg0) ? 0 : passStringToWasm0(arg0, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         var len0 = WASM_VECTOR_LEN;
-        wasm.__wbg_set_jwppresentationoptions_nonce(this.__wbg_ptr, ptr0, len0);
+        wasm.__wbg_set_presentationprotectedheader_aud(this.__wbg_ptr, ptr0, len0);
     }
     /**
      * For replay attacks.
@@ -9511,7 +12542,7 @@ export class PresentationProtectedHeader {
     set nonce(arg0) {
         var ptr0 = isLikeNone(arg0) ? 0 : passStringToWasm0(arg0, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         var len0 = WASM_VECTOR_LEN;
-        wasm.__wbg_set_presentationprotectedheader_nonce(this.__wbg_ptr, ptr0, len0);
+        wasm.__wbg_set_claimdisplay_description(this.__wbg_ptr, ptr0, len0);
     }
 }
 
@@ -9675,7 +12706,7 @@ export class ProofUpdateCtx {
     set old_start_validity_timeframe(arg0) {
         const ptr0 = passArray8ToWasm0(arg0, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
-        wasm.__wbg_set_proofupdatectx_old_start_validity_timeframe(this.__wbg_ptr, ptr0, len0);
+        wasm.__wbg_set_claimdisplay_lang(this.__wbg_ptr, ptr0, len0);
     }
     /**
      * New `startValidityTimeframe` value to be signed
@@ -9694,7 +12725,7 @@ export class ProofUpdateCtx {
     set new_start_validity_timeframe(arg0) {
         const ptr0 = passArray8ToWasm0(arg0, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
-        wasm.__wbg_set_proofupdatectx_new_start_validity_timeframe(this.__wbg_ptr, ptr0, len0);
+        wasm.__wbg_set_claimdisplay_label(this.__wbg_ptr, ptr0, len0);
     }
     /**
      * Old `endValidityTimeframe` value
@@ -9778,6 +12809,67 @@ export class ProofUpdateCtx {
      */
     set number_of_signed_messages(arg0) {
         wasm.__wbg_set_proofupdatectx_number_of_signed_messages(this.__wbg_ptr, arg0);
+    }
+}
+
+const PublishDidDocumentFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_publishdiddocument_free(ptr >>> 0, 1));
+
+export class PublishDidDocument {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(PublishDidDocument.prototype);
+        obj.__wbg_ptr = ptr;
+        PublishDidDocumentFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        PublishDidDocumentFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_publishdiddocument_free(ptr, 0);
+    }
+    /**
+     * @param {IotaDocument} did_document
+     * @param {string} controller
+     */
+    constructor(did_document, controller) {
+        _assertClass(did_document, IotaDocument);
+        const ptr0 = passStringToWasm0(controller, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.publishdiddocument_new(did_document.__wbg_ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        this.__wbg_ptr = ret[0] >>> 0;
+        PublishDidDocumentFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<Uint8Array>}
+     */
+    buildProgrammableTransaction(client) {
+        const ret = wasm.publishdiddocument_buildProgrammableTransaction(this.__wbg_ptr, client);
+        return ret;
+    }
+    /**
+     * @param {TransactionEffects} wasm_effects
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<IotaDocument>}
+     */
+    apply(wasm_effects, client) {
+        const ptr = this.__destroy_into_raw();
+        const ret = wasm.publishdiddocument_apply(ptr, wasm_effects, client);
+        return ret;
     }
 }
 
@@ -11726,6 +14818,153 @@ export class SelectiveDisclosurePresentation {
     }
 }
 
+const SendActionFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_sendaction_free(ptr >>> 0, 1));
+
+export class SendAction {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(SendAction.prototype);
+        obj.__wbg_ptr = ptr;
+        SendActionFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        SendActionFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_sendaction_free(ptr, 0);
+    }
+    /**
+     * @returns {([string, string])[]}
+     */
+    get objectRecipientMap() {
+        const ret = wasm.sendaction_objectRecipientMap(this.__wbg_ptr);
+        var v1 = getArrayJsValueFromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+}
+
+const SendProposalFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_sendproposal_free(ptr >>> 0, 1));
+
+export class SendProposal {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(SendProposal.prototype);
+        obj.__wbg_ptr = ptr;
+        SendProposalFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        SendProposalFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_sendproposal_free(ptr, 0);
+    }
+    /**
+     * @returns {string}
+     */
+    get id() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.sendproposal_id(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * @returns {SendAction}
+     */
+    get action() {
+        const ret = wasm.sendproposal_action(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return SendAction.__wrap(ret[0]);
+    }
+    /**
+     * @returns {bigint | undefined}
+     */
+    get expiration_epoch() {
+        const ret = wasm.sendproposal_expiration_epoch(this.__wbg_ptr);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        return ret[0] === 0 ? undefined : BigInt.asUintN(64, ret[1]);
+    }
+    /**
+     * @returns {bigint}
+     */
+    get votes() {
+        const ret = wasm.sendproposal_votes(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return BigInt.asUintN(64, ret[0]);
+    }
+    /**
+     * @returns {Set<string>}
+     */
+    get voters() {
+        const ret = wasm.sendproposal_voters(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * @param {OnChainIdentity} identity
+     * @param {ControllerToken} controller_token
+     * @returns {TransactionBuilder<ApproveProposal>}
+     */
+    approve(identity, controller_token) {
+        _assertClass(identity, OnChainIdentity);
+        _assertClass(controller_token, ControllerToken);
+        const ret = wasm.sendproposal_approve(this.__wbg_ptr, identity.__wbg_ptr, controller_token.__wbg_ptr);
+        return TransactionBuilder.__wrap(ret);
+    }
+    /**
+     * @param {OnChainIdentity} identity
+     * @param {ControllerToken} controller_token
+     * @returns {TransactionBuilder}
+     */
+    intoTx(identity, controller_token) {
+        const ptr = this.__destroy_into_raw();
+        _assertClass(identity, OnChainIdentity);
+        _assertClass(controller_token, ControllerToken);
+        const ret = wasm.sendproposal_intoTx(ptr, identity.__wbg_ptr, controller_token.__wbg_ptr);
+        return TransactionBuilder.__wrap(ret);
+    }
+}
+
 const ServiceFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_service_free(ptr >>> 0, 1));
@@ -12418,7 +15657,7 @@ export class StatusList2021Entry {
         }
     }
     /**
-     * Downcasts {@link this} to {@link Status}
+     * Downcasts {@link StatusList2021Entry} to {@link Status}
      * @returns {Status}
      */
     toStatus() {
@@ -12511,10 +15750,86 @@ export class Storage {
     }
 }
 
+const StorageSignerFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_storagesigner_free(ptr >>> 0, 1));
+
+export class StorageSigner {
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        StorageSignerFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_storagesigner_free(ptr, 0);
+    }
+    /**
+     * @param {Storage} storage
+     * @param {string} key_id
+     * @param {Jwk} public_key
+     */
+    constructor(storage, key_id, public_key) {
+        _assertClass(storage, Storage);
+        const ptr0 = passStringToWasm0(key_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        _assertClass(public_key, Jwk);
+        var ptr1 = public_key.__destroy_into_raw();
+        const ret = wasm.storagesigner_new(storage.__wbg_ptr, ptr0, len0, ptr1);
+        this.__wbg_ptr = ret >>> 0;
+        StorageSignerFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * @returns {string}
+     */
+    keyId() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.storagesigner_keyId(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @param {Uint8Array} data
+     * @returns {Promise<string>}
+     */
+    sign(data) {
+        const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.storagesigner_sign(this.__wbg_ptr, ptr0, len0);
+        return ret;
+    }
+    /**
+     * @returns {Promise<PublicKey>}
+     */
+    publicKey() {
+        const ret = wasm.storagesigner_publicKey(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {Promise<Uint8Array>}
+     */
+    iotaPublicKeyBytes() {
+        const ret = wasm.storagesigner_iotaPublicKeyBytes(this.__wbg_ptr);
+        return ret;
+    }
+}
+
 const TimestampFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_timestamp_free(ptr >>> 0, 1));
-
+/**
+ * A parsed Timestamp.
+ */
 export class Timestamp {
 
     static __wrap(ptr) {
@@ -12638,6 +15953,272 @@ export class Timestamp {
             throw takeFromExternrefTable0(ret[1]);
         }
         return Timestamp.__wrap(ret[0]);
+    }
+}
+
+const TransactionBuilderFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_transactionbuilder_free(ptr >>> 0, 1));
+
+export class TransactionBuilder {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(TransactionBuilder.prototype);
+        obj.__wbg_ptr = ptr;
+        TransactionBuilderFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        TransactionBuilderFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_transactionbuilder_free(ptr, 0);
+    }
+    /**
+     * Execute this transaction using an IOTA Gas Station.
+     * @param {CoreClient} client
+     * @param {string} gas_station_url
+     * @param {HttpClient} http_client
+     * @param {GasStationParams | null} [options]
+     * @returns {Promise<TransactionOutput>}
+     */
+    executeWithGasStation(client, gas_station_url, http_client, options) {
+        const ptr = this.__destroy_into_raw();
+        const ptr0 = passStringToWasm0(gas_station_url, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        let ptr1 = 0;
+        if (!isLikeNone(options)) {
+            _assertClass(options, GasStationParams);
+            ptr1 = options.__destroy_into_raw();
+        }
+        const ret = wasm.transactionbuilder_executeWithGasStation(ptr, client, ptr0, len0, http_client, ptr1);
+        return ret;
+    }
+    /**
+     * @param {Transaction<unknown>} tx
+     */
+    constructor(tx) {
+        const ret = wasm.transactionbuilder_new(tx);
+        this.__wbg_ptr = ret >>> 0;
+        TransactionBuilderFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * @returns {Transaction<unknown>}
+     */
+    get transaction() {
+        const ret = wasm.transactionbuilder_transaction(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {bigint} price
+     * @returns {TransactionBuilder}
+     */
+    withGasPrice(price) {
+        const ptr = this.__destroy_into_raw();
+        const ret = wasm.transactionbuilder_withGasPrice(ptr, price);
+        return TransactionBuilder.__wrap(ret);
+    }
+    /**
+     * @param {bigint} budget
+     * @returns {TransactionBuilder}
+     */
+    withGasBudget(budget) {
+        const ptr = this.__destroy_into_raw();
+        const ret = wasm.transactionbuilder_withGasBudget(ptr, budget);
+        return TransactionBuilder.__wrap(ret);
+    }
+    /**
+     * @param {string} owner
+     * @returns {TransactionBuilder}
+     */
+    withGasOwner(owner) {
+        const ptr = this.__destroy_into_raw();
+        const ptr0 = passStringToWasm0(owner, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.transactionbuilder_withGasOwner(ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return TransactionBuilder.__wrap(ret[0]);
+    }
+    /**
+     * @param {IotaObjectRef[]} payment
+     * @returns {TransactionBuilder}
+     */
+    withGasPayment(payment) {
+        const ptr = this.__destroy_into_raw();
+        const ptr0 = passArrayJsValueToWasm0(payment, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.transactionbuilder_withGasPayment(ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return TransactionBuilder.__wrap(ret[0]);
+    }
+    /**
+     * @param {string} sender
+     * @returns {TransactionBuilder}
+     */
+    withSender(sender) {
+        const ptr = this.__destroy_into_raw();
+        const ptr0 = passStringToWasm0(sender, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.transactionbuilder_withSender(ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return TransactionBuilder.__wrap(ret[0]);
+    }
+    /**
+     * @param {CoreClient} client
+     * @returns {Promise<TransactionBuilder>}
+     */
+    withSignature(client) {
+        const ptr = this.__destroy_into_raw();
+        const ret = wasm.transactionbuilder_withSignature(ptr, client);
+        return ret;
+    }
+    /**
+     * @param {CoreClientReadOnly} client
+     * @param {SponsorFn} sponsor_fn
+     * @returns {Promise<TransactionBuilder>}
+     */
+    withSponsor(client, sponsor_fn) {
+        const ptr = this.__destroy_into_raw();
+        const ret = wasm.transactionbuilder_withSponsor(ptr, client, sponsor_fn);
+        return ret;
+    }
+    /**
+     * @param {CoreClient} client
+     * @returns {[Uint8Array, string[], Transaction]}
+     */
+    build(client) {
+        const ptr = this.__destroy_into_raw();
+        const ret = wasm.transactionbuilder_build(ptr, client);
+        return ret;
+    }
+    /**
+     * @param {CoreClientReadOnly} client
+     * @returns {[Uint8Array, string[], Transaction]}
+     */
+    build_with_defaults(client) {
+        const ptr = this.__destroy_into_raw();
+        const ret = wasm.transactionbuilder_build_with_defaults(ptr, client);
+        return ret;
+    }
+    /**
+     * @param {CoreClient} client
+     * @returns {TransactionOutput<unknown>}
+     */
+    buildAndExecute(client) {
+        const ptr = this.__destroy_into_raw();
+        const ret = wasm.transactionbuilder_buildAndExecute(ptr, client);
+        return ret;
+    }
+}
+
+const TransactionOutputFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_transactionoutput_free(ptr >>> 0, 1));
+
+export class TransactionOutput {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(TransactionOutput.prototype);
+        obj.__wbg_ptr = ptr;
+        TransactionOutputFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    toJSON() {
+        return {
+            output: this.output,
+            response: this.response,
+        };
+    }
+
+    toString() {
+        return JSON.stringify(this);
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        TransactionOutputFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_transactionoutput_free(ptr, 0);
+    }
+    /**
+     * @returns {any}
+     */
+    get output() {
+        const ret = wasm.__wbg_get_transactionoutput_output(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {any} arg0
+     */
+    set output(arg0) {
+        wasm.__wbg_set_transactionoutput_output(this.__wbg_ptr, arg0);
+    }
+    /**
+     * @returns {IotaTransactionBlockResponse}
+     */
+    get response() {
+        const ret = wasm.__wbg_get_transactionoutput_response(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {IotaTransactionBlockResponse} arg0
+     */
+    set response(arg0) {
+        wasm.__wbg_set_transactionoutput_response(this.__wbg_ptr, arg0);
+    }
+}
+
+const TransactionOutputInternalIotaDocumentFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_transactionoutputinternaliotadocument_free(ptr >>> 0, 1));
+
+export class TransactionOutputInternalIotaDocument {
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        TransactionOutputInternalIotaDocumentFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_transactionoutputinternaliotadocument_free(ptr, 0);
+    }
+    /**
+     * @returns {IotaDocument}
+     */
+    get output() {
+        const ret = wasm.transactionoutputinternaliotadocument_output(this.__wbg_ptr);
+        return IotaDocument.__wrap(ret);
+    }
+    /**
+     * @returns {WasmIotaTransactionBlockResponseWrapper}
+     */
+    get response() {
+        const ret = wasm.transactionoutputinternaliotadocument_response(this.__wbg_ptr);
+        return ret;
     }
 }
 
@@ -12818,6 +16399,183 @@ export class UnknownCredential {
     clone() {
         const ret = wasm.unknowncredential_clone(this.__wbg_ptr);
         return UnknownCredential.__wrap(ret);
+    }
+}
+
+const UpdateDidFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_updatedid_free(ptr >>> 0, 1));
+
+export class UpdateDid {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(UpdateDid.prototype);
+        obj.__wbg_ptr = ptr;
+        UpdateDidFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        UpdateDidFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_updatedid_free(ptr, 0);
+    }
+    /**
+     * @returns {boolean}
+     */
+    isDeactivation() {
+        const ret = wasm.updatedid_isDeactivation(this.__wbg_ptr);
+        return ret !== 0;
+    }
+    /**
+     * @returns {IotaDocument | undefined}
+     */
+    get didDocument() {
+        const ret = wasm.updatedid_didDocument(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0] === 0 ? undefined : IotaDocument.__wrap(ret[0]);
+    }
+}
+
+const UpdateDidProposalFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_updatedidproposal_free(ptr >>> 0, 1));
+
+export class UpdateDidProposal {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(UpdateDidProposal.prototype);
+        obj.__wbg_ptr = ptr;
+        UpdateDidProposalFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        UpdateDidProposalFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_updatedidproposal_free(ptr, 0);
+    }
+}
+
+const UpdatedDidProposalFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_updateddidproposal_free(ptr >>> 0, 1));
+
+export class UpdatedDidProposal {
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        UpdatedDidProposalFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_updateddidproposal_free(ptr, 0);
+    }
+    /**
+     * @returns {string}
+     */
+    get id() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.updateddidproposal_id(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * @returns {UpdateDid}
+     */
+    get action() {
+        const ret = wasm.updateddidproposal_action(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return UpdateDid.__wrap(ret[0]);
+    }
+    /**
+     * @returns {bigint | undefined}
+     */
+    get expiration_epoch() {
+        const ret = wasm.updateddidproposal_expiration_epoch(this.__wbg_ptr);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        return ret[0] === 0 ? undefined : BigInt.asUintN(64, ret[1]);
+    }
+    /**
+     * @returns {bigint}
+     */
+    get votes() {
+        const ret = wasm.updateddidproposal_votes(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return BigInt.asUintN(64, ret[0]);
+    }
+    /**
+     * @returns {Set<string>}
+     */
+    get voters() {
+        const ret = wasm.updateddidproposal_voters(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * @param {OnChainIdentity} identity
+     * @param {ControllerToken} controller_token
+     * @returns {TransactionBuilder<ApproveProposal>}
+     */
+    approve(identity, controller_token) {
+        _assertClass(identity, OnChainIdentity);
+        _assertClass(controller_token, ControllerToken);
+        const ret = wasm.updateddidproposal_approve(this.__wbg_ptr, identity.__wbg_ptr, controller_token.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return TransactionBuilder.__wrap(ret[0]);
+    }
+    /**
+     * @param {OnChainIdentity} identity
+     * @param {ControllerToken} controller_token
+     * @returns {TransactionBuilder<ExecuteProposal<UpdateDid>>}
+     */
+    intoTx(identity, controller_token) {
+        const ptr = this.__destroy_into_raw();
+        _assertClass(identity, OnChainIdentity);
+        _assertClass(controller_token, ControllerToken);
+        const ret = wasm.updateddidproposal_intoTx(ptr, identity.__wbg_ptr, controller_token.__wbg_ptr);
+        return TransactionBuilder.__wrap(ret);
     }
 }
 
@@ -13031,6 +16789,268 @@ export class VerificationMethod {
     }
 }
 
+const WasmAccessSubIdentityTxFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmaccesssubidentitytx_free(ptr >>> 0, 1));
+
+export class WasmAccessSubIdentityTx {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(WasmAccessSubIdentityTx.prototype);
+        obj.__wbg_ptr = ptr;
+        WasmAccessSubIdentityTxFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        WasmAccessSubIdentityTxFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_wasmaccesssubidentitytx_free(ptr, 0);
+    }
+    /**
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<Uint8Array>}
+     */
+    buildProgrammableTransaction(client) {
+        const ret = wasm.wasmaccesssubidentitytx_buildProgrammableTransaction(this.__wbg_ptr, client);
+        return ret;
+    }
+    /**
+     * @param {TransactionEffects} wasm_effects
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<any>}
+     */
+    apply(wasm_effects, client) {
+        const ptr = this.__destroy_into_raw();
+        const ret = wasm.wasmaccesssubidentitytx_apply(ptr, wasm_effects, client);
+        return ret;
+    }
+}
+
+const WasmApproveAccessSubIdentityProposalFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmapproveaccesssubidentityproposal_free(ptr >>> 0, 1));
+
+export class WasmApproveAccessSubIdentityProposal {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(WasmApproveAccessSubIdentityProposal.prototype);
+        obj.__wbg_ptr = ptr;
+        WasmApproveAccessSubIdentityProposalFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        WasmApproveAccessSubIdentityProposalFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_wasmapproveaccesssubidentityproposal_free(ptr, 0);
+    }
+    /**
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<Uint8Array>}
+     */
+    buildProgrammableTransaction(client) {
+        const ret = wasm.wasmapproveaccesssubidentityproposal_buildProgrammableTransaction(this.__wbg_ptr, client);
+        return ret;
+    }
+    /**
+     * @param {TransactionEffects} wasm_effects
+     * @param {CoreClientReadOnly} client
+     * @returns {Promise<void>}
+     */
+    apply(wasm_effects, client) {
+        const ptr = this.__destroy_into_raw();
+        const ret = wasm.wasmapproveaccesssubidentityproposal_apply(ptr, wasm_effects, client);
+        return ret;
+    }
+}
+
+const WasmManagedCoreClientFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmmanagedcoreclient_free(ptr >>> 0, 1));
+
+export class WasmManagedCoreClient {
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        WasmManagedCoreClientFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_wasmmanagedcoreclient_free(ptr, 0);
+    }
+    /**
+     * @returns {string}
+     */
+    packageId() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.wasmmanagedcoreclient_packageId(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @returns {string[]}
+     */
+    packageHistory() {
+        const ret = wasm.wasmmanagedcoreclient_packageHistory(this.__wbg_ptr);
+        var v1 = getArrayJsValueFromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
+     * @returns {string}
+     */
+    network() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.wasmmanagedcoreclient_network(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @returns {IotaClient}
+     */
+    iotaClient() {
+        const ret = wasm.wasmmanagedcoreclient_iotaClient(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {TransactionSigner}
+     */
+    signer() {
+        const ret = wasm.wasmmanagedcoreclient_signer(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {string}
+     */
+    senderAddress() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.wasmmanagedcoreclient_senderAddress(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @returns {PublicKey}
+     */
+    senderPublicKey() {
+        const ret = wasm.wasmmanagedcoreclient_senderPublicKey(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+}
+
+const WasmManagedCoreClientReadOnlyFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmmanagedcoreclientreadonly_free(ptr >>> 0, 1));
+
+export class WasmManagedCoreClientReadOnly {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(WasmManagedCoreClientReadOnly.prototype);
+        obj.__wbg_ptr = ptr;
+        WasmManagedCoreClientReadOnlyFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        WasmManagedCoreClientReadOnlyFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_wasmmanagedcoreclientreadonly_free(ptr, 0);
+    }
+    /**
+     * @returns {string}
+     */
+    packageId() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.wasmmanagedcoreclientreadonly_packageId(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @returns {string[]}
+     */
+    packageHistory() {
+        const ret = wasm.wasmmanagedcoreclientreadonly_packageHistory(this.__wbg_ptr);
+        var v1 = getArrayJsValueFromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
+     * @returns {string}
+     */
+    network() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.wasmmanagedcoreclientreadonly_network(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @returns {IotaClient}
+     */
+    iotaClient() {
+        const ret = wasm.wasmmanagedcoreclientreadonly_iotaClient(this.__wbg_ptr);
+        return ret;
+    }
+}
+
+const EXPECTED_RESPONSE_TYPES = new Set(['basic', 'cors', 'default']);
+
 async function __wbg_load(module, imports) {
     if (typeof Response === 'function' && module instanceof Response) {
         if (typeof WebAssembly.instantiateStreaming === 'function') {
@@ -13038,7 +17058,9 @@ async function __wbg_load(module, imports) {
                 return await WebAssembly.instantiateStreaming(module, imports);
 
             } catch (e) {
-                if (module.headers.get('Content-Type') != 'application/wasm') {
+                const validResponse = module.ok && EXPECTED_RESPONSE_TYPES.has(module.type);
+
+                if (validResponse && module.headers.get('Content-Type') !== 'application/wasm') {
                     console.warn("`WebAssembly.instantiateStreaming` failed because your server does not serve Wasm with `application/wasm` MIME type. Falling back to `WebAssembly.instantiate` which is slower. Original error:\n", e);
 
                 } else {
@@ -13065,6 +17087,14 @@ async function __wbg_load(module, imports) {
 function __wbg_get_imports() {
     const imports = {};
     imports.wbg = {};
+    imports.wbg.__wbg_Error_90f14b053b2af32f = function(arg0, arg1) {
+        const ret = Error(getStringFromWasm0(arg0, arg1));
+        return ret;
+    };
+    imports.wbg.__wbg_Number_d61e9549dcb95df6 = function(arg0) {
+        const ret = Number(arg0);
+        return ret;
+    };
     imports.wbg.__wbg_String_8f0eb39a4a4c2f66 = function(arg0, arg1) {
         const ret = String(arg1);
         const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -13072,23 +17102,95 @@ function __wbg_get_imports() {
         getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
         getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
     };
-    imports.wbg.__wbg_algName_ef2d80addc2b16ce = function(arg0, arg1) {
+    imports.wbg.__wbg_abort_4703781fc49d1f48 = function(arg0) {
+        arg0.abort();
+    };
+    imports.wbg.__wbg_abort_a47139ff13270262 = function(arg0, arg1) {
+        arg0.abort(arg1);
+    };
+    imports.wbg.__wbg_accesssubidentityproposal_new = function(arg0) {
+        const ret = AccessSubIdentityProposal.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_add_189a07ff0e520dee = function(arg0, arg1) {
+        const ret = arg0.add(arg1);
+        return ret;
+    };
+    imports.wbg.__wbg_algName_f3ca170a34bfee88 = function(arg0, arg1) {
         const ret = arg1.algName();
         const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len1 = WASM_VECTOR_LEN;
         getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
         getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
     };
-    imports.wbg.__wbg_buffer_609cc3eee51ed158 = function(arg0) {
-        const ret = arg0.buffer;
-        return ret;
-    };
-    imports.wbg.__wbg_call_672a4d21634d4a24 = function() { return handleError(function (arg0, arg1) {
-        const ret = arg0.call(arg1);
+    imports.wbg.__wbg_append_86985cd0ff9b3735 = function() { return handleError(function (arg0, arg1, arg2, arg3, arg4) {
+        arg0.append(getStringFromWasm0(arg1, arg2), getStringFromWasm0(arg3, arg4));
+    }, arguments) };
+    imports.wbg.__wbg_applyWithEvents_d95d46fe202b0154 = function() { return handleError(function (arg0, arg1, arg2, arg3) {
+        const ret = arg0.applyWithEvents(arg1, arg2, arg3);
         return ret;
     }, arguments) };
-    imports.wbg.__wbg_call_7cccdd69e0791ae2 = function() { return handleError(function (arg0, arg1, arg2) {
+    imports.wbg.__wbg_apply_52bc118dfaf50cf1 = function() { return handleError(function (arg0, arg1, arg2) {
+        const ret = arg0.apply(arg1, arg2);
+        return ret;
+    }, arguments) };
+    imports.wbg.__wbg_approveborrowproposal_new = function(arg0) {
+        const ret = ApproveBorrowProposal.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_approveconfigchangeproposal_new = function(arg0) {
+        const ret = ApproveConfigChangeProposal.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_approvecontrollerexecutionproposal_new = function(arg0) {
+        const ret = ApproveControllerExecutionProposal.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_approvesendproposal_new = function(arg0) {
+        const ret = ApproveSendProposal.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_approveupdatediddocumentproposal_new = function(arg0) {
+        const ret = ApproveUpdateDidDocumentProposal.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_arrayBuffer_c23deccc789004c3 = function() { return handleError(function (arg0) {
+        const ret = arg0.arrayBuffer();
+        return ret;
+    }, arguments) };
+    imports.wbg.__wbg_assign_8bf02b2f61473c72 = function(arg0, arg1) {
+        const ret = Object.assign(arg0, arg1);
+        return ret;
+    };
+    imports.wbg.__wbg_borrowproposal_new = function(arg0) {
+        const ret = BorrowProposal.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_buildProgrammableTransaction_5af293ab2eac707f = function() { return handleError(function (arg0, arg1) {
+        const ret = arg0.buildProgrammableTransaction(arg1);
+        return ret;
+    }, arguments) };
+    imports.wbg.__wbg_build_270d763d7db0987f = function(arg0, arg1, arg2) {
+        const ret = arg1.build(arg2);
+        const ptr1 = passArray8ToWasm0(ret, wasm.__wbindgen_malloc);
+        const len1 = WASM_VECTOR_LEN;
+        getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+        getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+    };
+    imports.wbg.__wbg_build_d5ddf2ffbdb45b09 = function() { return handleError(function (arg0) {
+        const ret = arg0.build();
+        return ret;
+    }, arguments) };
+    imports.wbg.__wbg_call_52af042a326d9b3a = function() { return handleError(function (arg0, arg1, arg2) {
         const ret = arg0.call(arg1, arg2);
+        return ret;
+    }, arguments) };
+    imports.wbg.__wbg_call_53657fec28b4db96 = function() { return handleError(function (arg0, arg1, arg2, arg3) {
+        const ret = arg0.call(arg1, arg2, arg3);
+        return ret;
+    }, arguments) };
+    imports.wbg.__wbg_call_90bf4b9978d51034 = function() { return handleError(function (arg0, arg1) {
+        const ret = arg0.call(arg1);
         return ret;
     }, arguments) };
     imports.wbg.__wbg_claimdisplay_new = function(arg0) {
@@ -13103,23 +17205,75 @@ function __wbg_get_imports() {
         const ret = ClaimMetadata.__unwrap(arg0);
         return ret;
     };
-    imports.wbg.__wbg_client_342b20edcfd22dbc = function(arg0) {
+    imports.wbg.__wbg_clearTimeout_6222fede17abcb1a = function(arg0) {
+        const ret = clearTimeout(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_client_bb9dd832cd53a019 = function(arg0) {
         const ret = arg0.client;
         return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
+    };
+    imports.wbg.__wbg_configchangeproposal_new = function(arg0) {
+        const ret = ConfigChangeProposal.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_controllerandvotingpower_unwrap = function(arg0) {
+        const ret = ControllerAndVotingPower.__unwrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_controllerexecutionproposal_new = function(arg0) {
+        const ret = ControllerExecutionProposal.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_controllertoken_new = function(arg0) {
+        const ret = ControllerToken.__wrap(arg0);
+        return ret;
     };
     imports.wbg.__wbg_coredid_new = function(arg0) {
         const ret = CoreDID.__wrap(arg0);
         return ret;
     };
-    imports.wbg.__wbg_crypto_ed58b8e10a292839 = function(arg0) {
+    imports.wbg.__wbg_createborrowproposal_new = function(arg0) {
+        const ret = CreateBorrowProposal.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_createconfigchangeproposal_new = function(arg0) {
+        const ret = CreateConfigChangeProposal.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_createcontrollerexecutionproposal_new = function(arg0) {
+        const ret = CreateControllerExecutionProposal.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_createidentity_new = function(arg0) {
+        const ret = CreateIdentity.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_createsendproposal_new = function(arg0) {
+        const ret = CreateSendProposal.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_createupdatedidproposal_new = function(arg0) {
+        const ret = CreateUpdateDidProposal.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_crypto_574e78ad8b13b65f = function(arg0) {
         const ret = arg0.crypto;
         return ret;
     };
-    imports.wbg.__wbg_deleteKeyId_8aab23d27ef8a064 = function(arg0, arg1) {
+    imports.wbg.__wbg_delegatetoken_new = function(arg0) {
+        const ret = DelegateToken.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_delegationtoken_new = function(arg0) {
+        const ret = DelegationToken.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_deleteKeyId_f9858d52ad86ecb0 = function(arg0, arg1) {
         const ret = arg0.deleteKeyId(MethodDigest.__wrap(arg1));
         return ret;
     };
-    imports.wbg.__wbg_delete_7a82fc1b285cf2ec = function(arg0, arg1, arg2) {
+    imports.wbg.__wbg_delete_36e0a1f3f10a7832 = function(arg0, arg1, arg2) {
         let deferred0_0;
         let deferred0_1;
         try {
@@ -13131,13 +17285,24 @@ function __wbg_get_imports() {
             wasm.__wbindgen_free(deferred0_0, deferred0_1, 1);
         }
     };
+    imports.wbg.__wbg_devInspectTransactionBlock_840533868cc31cee = function(arg0, arg1) {
+        const ret = arg0.devInspectTransactionBlock(arg1);
+        return ret;
+    };
     imports.wbg.__wbg_didurl_new = function(arg0) {
         const ret = DIDUrl.__wrap(arg0);
         return ret;
     };
-    imports.wbg.__wbg_digest_1985ec68df76d795 = function(arg0, arg1, arg2, arg3) {
+    imports.wbg.__wbg_digest_2e9b4cf006e8691b = function(arg0, arg1, arg2, arg3) {
         const ret = arg1.digest(getArrayU8FromWasm0(arg2, arg3));
         const ptr1 = passArray8ToWasm0(ret, wasm.__wbindgen_malloc);
+        const len1 = WASM_VECTOR_LEN;
+        getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+        getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+    };
+    imports.wbg.__wbg_digest_6771248b33914144 = function(arg0, arg1) {
+        const ret = arg1.digest;
+        const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len1 = WASM_VECTOR_LEN;
         getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
         getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
@@ -13150,18 +17315,18 @@ function __wbg_get_imports() {
         const ret = DisclosureV2.__unwrap(arg0);
         return ret;
     };
-    imports.wbg.__wbg_done_769e5ede4b31c67b = function(arg0) {
+    imports.wbg.__wbg_done_73bb10bcf6e0c339 = function(arg0) {
         const ret = arg0.done;
         return ret;
     };
-    imports.wbg.__wbg_encodedDigest_70a07ef5ca4440f7 = function(arg0, arg1, arg2, arg3) {
+    imports.wbg.__wbg_encodedDigest_2185eb3fa3bacc96 = function(arg0, arg1, arg2, arg3) {
         const ret = arg1.encodedDigest(getStringFromWasm0(arg2, arg3));
         const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len1 = WASM_VECTOR_LEN;
         getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
         getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
     };
-    imports.wbg.__wbg_entries_3265d4158b33e5dc = function(arg0) {
+    imports.wbg.__wbg_entries_4f3de4ccde51d587 = function(arg0) {
         const ret = Object.entries(arg0);
         return ret;
     };
@@ -13176,15 +17341,61 @@ function __wbg_get_imports() {
             wasm.__wbindgen_free(deferred0_0, deferred0_1, 1);
         }
     };
-    imports.wbg.__wbg_fromEntries_524679eecb0bdc2e = function() { return handleError(function (arg0) {
+    imports.wbg.__wbg_executeTransactionBlock_b1138c0c6bf5c828 = function(arg0, arg1) {
+        const ret = arg0.executeTransactionBlock(arg1);
+        return ret;
+    };
+    imports.wbg.__wbg_executeborrowproposal_new = function(arg0) {
+        const ret = ExecuteBorrowProposal.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_executeconfigchangeproposal_new = function(arg0) {
+        const ret = ExecuteConfigChangeProposal.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_executecontrollerexecutionproposal_new = function(arg0) {
+        const ret = ExecuteControllerExecutionProposal.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_executesendproposal_new = function(arg0) {
+        const ret = ExecuteSendProposal.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_executeupdatedidproposal_new = function(arg0) {
+        const ret = ExecuteUpdateDidProposal.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_fetch_611809d2c49be2d4 = function(arg0, arg1) {
+        const ret = arg0.fetch(arg1);
+        return ret;
+    };
+    imports.wbg.__wbg_fetch_f156d10be9a5c88a = function(arg0) {
+        const ret = fetch(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_fromBytes_1d5c3a70aa5469b7 = function() { return handleError(function (arg0) {
+        const ret = TransactionDataBuilder.fromBytes(arg0);
+        return ret;
+    }, arguments) };
+    imports.wbg.__wbg_fromEntries_a450185cffe7115e = function() { return handleError(function (arg0) {
         const ret = Object.fromEntries(arg0);
         return ret;
     }, arguments) };
-    imports.wbg.__wbg_from_2a5d3e218e67aa85 = function(arg0) {
+    imports.wbg.__wbg_fromKindBytes_8f0343cada5d7fce = function() { return handleError(function (arg0, arg1) {
+        var v0 = getArrayU8FromWasm0(arg0, arg1).slice();
+        wasm.__wbindgen_free(arg0, arg1 * 1, 1);
+        const ret = TransactionDataBuilder.fromKindBytes(v0);
+        return ret;
+    }, arguments) };
+    imports.wbg.__wbg_from_0abead09566817ae = function(arg0) {
         const ret = Array.from(arg0);
         return ret;
     };
-    imports.wbg.__wbg_generate_46a2fa6e3204c928 = function(arg0, arg1, arg2, arg3, arg4) {
+    imports.wbg.__wbg_gasstationparams_new = function(arg0) {
+        const ret = GasStationParams.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_generate_c630638f1a9839b6 = function(arg0, arg1, arg2, arg3, arg4) {
         let deferred0_0;
         let deferred0_1;
         let deferred1_0;
@@ -13201,54 +17412,88 @@ function __wbg_get_imports() {
             wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
         }
     };
-    imports.wbg.__wbg_getAliasOutput_6dc604f3f4a2710e = function(arg0, arg1, arg2) {
-        let deferred0_0;
-        let deferred0_1;
-        try {
-            deferred0_0 = arg1;
-            deferred0_1 = arg2;
-            const ret = arg0.getAliasOutput(getStringFromWasm0(arg1, arg2));
-            return ret;
-        } finally {
-            wasm.__wbindgen_free(deferred0_0, deferred0_1, 1);
-        }
+    imports.wbg.__wbg_getChainIdentifier_0dc506b073d28408 = function(arg0) {
+        const ret = arg0.getChainIdentifier();
+        return ret;
     };
-    imports.wbg.__wbg_getCoreDidCloneInternal_7541d3cf46b8b836 = function(arg0) {
+    imports.wbg.__wbg_getCoins_1e8fe712ed955140 = function(arg0, arg1) {
+        const ret = arg0.getCoins(arg1);
+        return ret;
+    };
+    imports.wbg.__wbg_getCoreDidCloneInternal_79c43702087a6485 = function(arg0) {
         const ret = _getCoreDidCloneInternal(arg0);
         _assertClass(ret, CoreDID);
         var ptr1 = ret.__destroy_into_raw();
         return ptr1;
     };
-    imports.wbg.__wbg_getCoreDocumentInternal_20da2e8abf5f9d6b = function(arg0) {
+    imports.wbg.__wbg_getCoreDocumentInternal_32a170b2097100dc = function(arg0) {
         const ret = _getCoreDocumentInternal(arg0);
         _assertClass(ret, CoreDocument);
         var ptr1 = ret.__destroy_into_raw();
         return ptr1;
     };
-    imports.wbg.__wbg_getKeyId_b3b105ec42805e11 = function(arg0, arg1) {
+    imports.wbg.__wbg_getDynamicFieldObject_4bbca3c94bb87137 = function(arg0, arg1) {
+        const ret = arg0.getDynamicFieldObject(arg1);
+        return ret;
+    };
+    imports.wbg.__wbg_getKeyId_ce087e51a0e3e465 = function(arg0, arg1) {
         const ret = arg0.getKeyId(MethodDigest.__wrap(arg1));
         return ret;
     };
-    imports.wbg.__wbg_getProtocolParameters_e088221e7bc7886f = function(arg0) {
-        const ret = arg0.getProtocolParameters();
+    imports.wbg.__wbg_getObject_a133c41aec224650 = function(arg0, arg1) {
+        const ret = arg0.getObject(arg1);
         return ret;
     };
-    imports.wbg.__wbg_getRandomValues_bcb4912f16000dc4 = function() { return handleError(function (arg0, arg1) {
+    imports.wbg.__wbg_getOwnedObjects_0b02014059d0c0ee = function(arg0, arg1) {
+        const ret = arg0.getOwnedObjects(arg1);
+        return ret;
+    };
+    imports.wbg.__wbg_getRandomValues_3c9c0d586e575a16 = function() { return handleError(function (arg0, arg1) {
+        globalThis.crypto.getRandomValues(getArrayU8FromWasm0(arg0, arg1));
+    }, arguments) };
+    imports.wbg.__wbg_getRandomValues_b8f5dbd5f3995a9e = function() { return handleError(function (arg0, arg1) {
         arg0.getRandomValues(arg1);
     }, arguments) };
-    imports.wbg.__wbg_get_13495dac72693ecc = function(arg0, arg1) {
+    imports.wbg.__wbg_getReferenceGasPrice_dcddd0afac7c1ec2 = function(arg0) {
+        const ret = arg0.getReferenceGasPrice();
+        return ret;
+    };
+    imports.wbg.__wbg_getTransactionBlock_a69f8a4074610ab1 = function(arg0, arg1) {
+        const ret = arg0.getTransactionBlock(arg1);
+        return ret;
+    };
+    imports.wbg.__wbg_get_4e6bdcf1f0e0bbbb = function(arg0, arg1) {
         const ret = arg0.get(arg1);
         return ret;
     };
-    imports.wbg.__wbg_get_67b2ba62fc30de12 = function() { return handleError(function (arg0, arg1) {
-        const ret = Reflect.get(arg0, arg1);
+    imports.wbg.__wbg_get_64d1cbbdd947176f = function() { return handleError(function (arg0, arg1) {
+        const ret = Reflect.get(arg0, arg1 >>> 0);
         return ret;
     }, arguments) };
-    imports.wbg.__wbg_get_b9b93047fe3cf45b = function(arg0, arg1) {
+    imports.wbg.__wbg_get_6e64f6b3af0c61a2 = function(arg0, arg1) {
         const ret = arg0[arg1 >>> 0];
         return ret;
     };
-    imports.wbg.__wbg_getkey_a7fe4a22f4bdf8b8 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbg_get_bb21663672334172 = function() { return handleError(function (arg0, arg1) {
+        const ret = Reflect.get(arg0, arg1);
+        return ret;
+    }, arguments) };
+    imports.wbg.__wbg_getdigest_8957c122a73ac944 = function(arg0, arg1) {
+        const ret = arg1.get_digest();
+        const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+        getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+    };
+    imports.wbg.__wbg_geteffects_df0d22421c93a319 = function(arg0) {
+        const ret = arg0.get_effects();
+        return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
+    };
+    imports.wbg.__wbg_getevents_145718e01c5eb0e7 = function(arg0) {
+        const ret = arg0.get_events();
+        return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
+    };
+    imports.wbg.__wbg_getkey_606b6fd51d7f7ed9 = function(arg0, arg1, arg2) {
         const ret = arg0._get_key(getStringFromWasm0(arg1, arg2));
         let ptr1 = 0;
         if (!isLikeNone(ret)) {
@@ -13257,19 +17502,43 @@ function __wbg_get_imports() {
         }
         return ptr1;
     };
+    imports.wbg.__wbg_getresponse_82855a4da1154445 = function(arg0) {
+        const ret = arg0.get_response();
+        return ret;
+    };
     imports.wbg.__wbg_getwithrefkey_1dc361bd10053bfe = function(arg0, arg1) {
         const ret = arg0[arg1];
         return ret;
     };
-    imports.wbg.__wbg_handlers_4e4448a3dea8e42f = function(arg0) {
+    imports.wbg.__wbg_handlers_a29f1e75f85a7608 = function(arg0) {
         const ret = arg0.handlers;
         return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
     };
-    imports.wbg.__wbg_id_00a236c04254be6c = function(arg0) {
+    imports.wbg.__wbg_has_d475219e5abfb8d5 = function() { return handleError(function (arg0, arg1) {
+        const ret = Reflect.has(arg0, arg1);
+        return ret;
+    }, arguments) };
+    imports.wbg.__wbg_headers_2fbd6da24e99b7fe = function(arg0) {
+        const ret = arg0.headers;
+        return ret;
+    };
+    imports.wbg.__wbg_id_a5bccdaa24264688 = function(arg0) {
         const ret = arg0.id;
         return ret;
     };
-    imports.wbg.__wbg_insertKeyId_fe424ca03e97e1f8 = function(arg0, arg1, arg2, arg3) {
+    imports.wbg.__wbg_identity_new = function(arg0) {
+        const ret = Identity.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_identityclient_new = function(arg0) {
+        const ret = IdentityClient.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_identityclientreadonly_new = function(arg0) {
+        const ret = IdentityClientReadOnly.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_insertKeyId_470bc17988d1fff7 = function(arg0, arg1, arg2, arg3) {
         let deferred0_0;
         let deferred0_1;
         try {
@@ -13281,11 +17550,11 @@ function __wbg_get_imports() {
             wasm.__wbindgen_free(deferred0_0, deferred0_1, 1);
         }
     };
-    imports.wbg.__wbg_insert_c78fb1823fdbc53b = function(arg0, arg1) {
+    imports.wbg.__wbg_insert_61737e7e95cfe4e1 = function(arg0, arg1) {
         const ret = arg0.insert(Jwk.__wrap(arg1));
         return ret;
     };
-    imports.wbg.__wbg_instanceof_ArrayBuffer_e14585432e3737fc = function(arg0) {
+    imports.wbg.__wbg_instanceof_ArrayBuffer_625e762023eb35cf = function(arg0) {
         let result;
         try {
             result = arg0 instanceof ArrayBuffer;
@@ -13295,7 +17564,7 @@ function __wbg_get_imports() {
         const ret = result;
         return ret;
     };
-    imports.wbg.__wbg_instanceof_Error_4d54113b22d20306 = function(arg0) {
+    imports.wbg.__wbg_instanceof_Error_936b8ad5e24143da = function(arg0) {
         let result;
         try {
             result = arg0 instanceof Error;
@@ -13305,7 +17574,17 @@ function __wbg_get_imports() {
         const ret = result;
         return ret;
     };
-    imports.wbg.__wbg_instanceof_Map_f3469ce2244d2430 = function(arg0) {
+    imports.wbg.__wbg_instanceof_MapStringNumber_c898a14d4168db5a = function(arg0) {
+        let result;
+        try {
+            result = arg0 instanceof MapStringNumber;
+        } catch (_) {
+            result = false;
+        }
+        const ret = result;
+        return ret;
+    };
+    imports.wbg.__wbg_instanceof_Map_7d3de120a6cca988 = function(arg0) {
         let result;
         try {
             result = arg0 instanceof Map;
@@ -13315,7 +17594,37 @@ function __wbg_get_imports() {
         const ret = result;
         return ret;
     };
-    imports.wbg.__wbg_instanceof_TypeMetadataHelper_da3f9a6a410f81c1 = function(arg0) {
+    imports.wbg.__wbg_instanceof_Promise_0d0182c66de89351 = function(arg0) {
+        let result;
+        try {
+            result = arg0 instanceof Promise;
+        } catch (_) {
+            result = false;
+        }
+        const ret = result;
+        return ret;
+    };
+    imports.wbg.__wbg_instanceof_Response_fbc9a5db7a3ab57a = function(arg0) {
+        let result;
+        try {
+            result = arg0 instanceof Response;
+        } catch (_) {
+            result = false;
+        }
+        const ret = result;
+        return ret;
+    };
+    imports.wbg.__wbg_instanceof_StringSet_aaf0b045b1da1c4c = function(arg0) {
+        let result;
+        try {
+            result = arg0 instanceof StringSet;
+        } catch (_) {
+            result = false;
+        }
+        const ret = result;
+        return ret;
+    };
+    imports.wbg.__wbg_instanceof_TypeMetadataHelper_9e5bb0d422b6ebe2 = function(arg0) {
         let result;
         try {
             result = arg0 instanceof TypeMetadataHelper;
@@ -13325,7 +17634,7 @@ function __wbg_get_imports() {
         const ret = result;
         return ret;
     };
-    imports.wbg.__wbg_instanceof_Uint8Array_17156bcf118086a9 = function(arg0) {
+    imports.wbg.__wbg_instanceof_Uint8Array_6935b7b95ef40080 = function(arg0) {
         let result;
         try {
             result = arg0 instanceof Uint8Array;
@@ -13335,6 +17644,14 @@ function __wbg_get_imports() {
         const ret = result;
         return ret;
     };
+    imports.wbg.__wbg_iotaClient_bae00eecbb59e771 = function(arg0) {
+        const ret = arg0.iotaClient();
+        return ret;
+    };
+    imports.wbg.__wbg_iotaPublicKeyBytes_927dd93d5d2e5733 = function() { return handleError(function (arg0) {
+        const ret = arg0.iotaPublicKeyBytes();
+        return ret;
+    }, arguments) };
     imports.wbg.__wbg_iotadid_new = function(arg0) {
         const ret = IotaDID.__wrap(arg0);
         return ret;
@@ -13343,11 +17660,11 @@ function __wbg_get_imports() {
         const ret = IotaDocument.__wrap(arg0);
         return ret;
     };
-    imports.wbg.__wbg_isArray_a1eab7e0d067391b = function(arg0) {
+    imports.wbg.__wbg_isArray_fe31d4a8d77ae781 = function(arg0) {
         const ret = Array.isArray(arg0);
         return ret;
     };
-    imports.wbg.__wbg_isSafeInteger_343e2beeeece1bb0 = function(arg0) {
+    imports.wbg.__wbg_isSafeInteger_342db8cae87edb4e = function(arg0) {
         const ret = Number.isSafeInteger(arg0);
         return ret;
     };
@@ -13355,7 +17672,7 @@ function __wbg_get_imports() {
         const ret = IssuerMetadata.__wrap(arg0);
         return ret;
     };
-    imports.wbg.__wbg_iterator_9a24c88df860dc65 = function() {
+    imports.wbg.__wbg_iterator_fe047a6b04943f88 = function() {
         const ret = Symbol.iterator;
         return ret;
     };
@@ -13383,19 +17700,22 @@ function __wbg_get_imports() {
         const ret = KeyBindingJwt.__wrap(arg0);
         return ret;
     };
-    imports.wbg.__wbg_keys_4e7df9a04572b339 = function(arg0) {
+    imports.wbg.__wbg_keys_ec0cd9cf66823726 = function(arg0) {
         const ret = arg0.keys();
         return ret;
     };
-    imports.wbg.__wbg_length_a446193dc22c12f8 = function(arg0) {
+    imports.wbg.__wbg_length_09646ad20ebb8534 = function(arg0) {
         const ret = arg0.length;
         return ret;
     };
-    imports.wbg.__wbg_length_e2d2a49132c1b256 = function(arg0) {
+    imports.wbg.__wbg_length_537fa63a6103cbdb = function(arg0) {
         const ret = arg0.length;
         return ret;
     };
-    imports.wbg.__wbg_maybeGetIotaDocumentInternal_1e24d03d79a15aa8 = function(arg0) {
+    imports.wbg.__wbg_log_2506a2303aeb8a17 = function(arg0, arg1) {
+        console.log(getStringFromWasm0(arg0, arg1));
+    };
+    imports.wbg.__wbg_maybeGetIotaDocumentInternal_e629b97a802b0579 = function(arg0) {
         const ret = _maybeGetIotaDocumentInternal(arg0);
         let ptr1 = 0;
         if (!isLikeNone(ret)) {
@@ -13404,18 +17724,65 @@ function __wbg_get_imports() {
         }
         return ptr1;
     };
-    imports.wbg.__wbg_msCrypto_0a36e2ec3a343d26 = function(arg0) {
+    imports.wbg.__wbg_message_9060f364d8369021 = function(arg0) {
+        const ret = arg0.message;
+        return ret;
+    };
+    imports.wbg.__wbg_msCrypto_a61aeb35a24c1329 = function(arg0) {
         const ret = arg0.msCrypto;
         return ret;
     };
-    imports.wbg.__wbg_new_23a2665fac83c611 = function(arg0, arg1) {
+    imports.wbg.__wbg_name_700eeea832fa5032 = function(arg0) {
+        const ret = arg0.name;
+        return ret;
+    };
+    imports.wbg.__wbg_network_6c2a30e3f42fd522 = function(arg0, arg1) {
+        const ret = arg1.network();
+        const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+        getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+    };
+    imports.wbg.__wbg_new_1b925e0c0e1d30ba = function() {
+        const ret = new Object();
+        return ret;
+    };
+    imports.wbg.__wbg_new_3c48ee6a683248da = function() {
+        const ret = new Map();
+        return ret;
+    };
+    imports.wbg.__wbg_new_5a996e1e4f0a84c4 = function(arg0, arg1) {
+        const ret = new TypeError(getStringFromWasm0(arg0, arg1));
+        return ret;
+    };
+    imports.wbg.__wbg_new_7c134f9c83abf3a4 = function(arg0, arg1) {
+        const ret = new Error(getStringFromWasm0(arg0, arg1));
+        return ret;
+    };
+    imports.wbg.__wbg_new_8a6f238a6ece86ea = function() {
+        const ret = new Error();
+        return ret;
+    };
+    imports.wbg.__wbg_new_8c4553fdcf935d24 = function(arg0) {
+        const ret = new WasmIotaTransactionBlockResponseWrapper(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_new_8ff6ffa0dc289b1f = function() { return handleError(function () {
+        const ret = new Headers();
+        return ret;
+    }, arguments) };
+    imports.wbg.__wbg_new_911ef73db53a5d88 = function(arg0) {
+        const ret = new Set(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_new_b38cbb8a106768cf = function(arg0, arg1) {
         try {
             var state0 = {a: arg0, b: arg1};
             var cb0 = (arg0, arg1) => {
                 const a = state0.a;
                 state0.a = 0;
                 try {
-                    return __wbg_adapter_1029(a, state0.b, arg0, arg1);
+                    return __wbg_adapter_1455(a, state0.b, arg0, arg1);
                 } finally {
                     state0.a = a;
                 }
@@ -13426,100 +17793,149 @@ function __wbg_get_imports() {
             state0.a = state0.b = 0;
         }
     };
-    imports.wbg.__wbg_new_405e22f390576ce2 = function() {
-        const ret = new Object();
-        return ret;
-    };
-    imports.wbg.__wbg_new_5e0be73521bc8c17 = function() {
-        const ret = new Map();
-        return ret;
-    };
-    imports.wbg.__wbg_new_78feb108b6472713 = function() {
-        const ret = new Array();
-        return ret;
-    };
-    imports.wbg.__wbg_new_8a6f238a6ece86ea = function() {
-        const ret = new Error();
-        return ret;
-    };
-    imports.wbg.__wbg_new_a12002a7f91c75be = function(arg0) {
+    imports.wbg.__wbg_new_d6b08dae7359cebb = function(arg0) {
         const ret = new Uint8Array(arg0);
         return ret;
     };
-    imports.wbg.__wbg_new_c68d7209be747379 = function(arg0, arg1) {
-        const ret = new Error(getStringFromWasm0(arg0, arg1));
+    imports.wbg.__wbg_new_d8a154d0939e6bb4 = function() {
+        const ret = new Array();
         return ret;
     };
-    imports.wbg.__wbg_newnoargs_105ed471475aaf50 = function(arg0, arg1) {
+    imports.wbg.__wbg_new_eb9a0b389ac8dd8f = function() { return handleError(function () {
+        const ret = new AbortController();
+        return ret;
+    }, arguments) };
+    imports.wbg.__wbg_newed25519pkbase64_d566a552f1b1f1d4 = function() { return handleError(function (arg0, arg1) {
+        const ret = new Ed25519PublicKey(getStringFromWasm0(arg0, arg1));
+        return ret;
+    }, arguments) };
+    imports.wbg.__wbg_newfromslice_87a363f6accf981c = function(arg0, arg1) {
+        const ret = new Uint8Array(getArrayU8FromWasm0(arg0, arg1));
+        return ret;
+    };
+    imports.wbg.__wbg_newnoargs_863941679b1933bb = function(arg0, arg1) {
         const ret = new Function(getStringFromWasm0(arg0, arg1));
         return ret;
     };
-    imports.wbg.__wbg_newwithbyteoffsetandlength_d97e637ebe145a9a = function(arg0, arg1, arg2) {
-        const ret = new Uint8Array(arg0, arg1 >>> 0, arg2 >>> 0);
+    imports.wbg.__wbg_newsecp256k1pkbase64_17f4fa4c04770000 = function() { return handleError(function (arg0, arg1) {
+        const ret = new Secp256k1PublicKey(getStringFromWasm0(arg0, arg1));
         return ret;
-    };
-    imports.wbg.__wbg_newwithlength_a381634e90c276d4 = function(arg0) {
+    }, arguments) };
+    imports.wbg.__wbg_newsecp256r1pkbase64_8a62649904277b78 = function() { return handleError(function (arg0, arg1) {
+        const ret = new Secp256r1PublicKey(getStringFromWasm0(arg0, arg1));
+        return ret;
+    }, arguments) };
+    imports.wbg.__wbg_newwithlength_79dd8226b146df94 = function(arg0) {
         const ret = new Uint8Array(arg0 >>> 0);
         return ret;
     };
-    imports.wbg.__wbg_next_25feadfc0913fea9 = function(arg0) {
+    imports.wbg.__wbg_newwithstrandinit_59c419a01785b79c = function() { return handleError(function (arg0, arg1, arg2) {
+        const ret = new Request(getStringFromWasm0(arg0, arg1), arg2);
+        return ret;
+    }, arguments) };
+    imports.wbg.__wbg_next_59846e169128a0ea = function(arg0) {
         const ret = arg0.next;
         return ret;
     };
-    imports.wbg.__wbg_next_6574e1a8a62d1055 = function() { return handleError(function (arg0) {
+    imports.wbg.__wbg_next_c782e76a0400870a = function() { return handleError(function (arg0) {
         const ret = arg0.next();
         return ret;
     }, arguments) };
-    imports.wbg.__wbg_node_02999533c4ea02e3 = function(arg0) {
+    imports.wbg.__wbg_node_905d3e251edff8a2 = function(arg0) {
         const ret = arg0.node;
         return ret;
     };
-    imports.wbg.__wbg_now_807e54c39636c349 = function() {
+    imports.wbg.__wbg_now_5180ef7a3cc4af32 = function() {
         const ret = Date.now();
         return ret;
+    };
+    imports.wbg.__wbg_objectId_a704e0e8f300c690 = function(arg0, arg1) {
+        const ret = arg1.objectId;
+        const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+        getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+    };
+    imports.wbg.__wbg_onchainidentity_new = function(arg0) {
+        const ret = OnChainIdentity.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_packageHistory_a057cdd427b5a5e5 = function(arg0, arg1) {
+        const ret = arg1.packageHistory();
+        const ptr1 = passArrayJsValueToWasm0(ret, wasm.__wbindgen_malloc);
+        const len1 = WASM_VECTOR_LEN;
+        getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+        getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+    };
+    imports.wbg.__wbg_parse_9831b1f6fb40208a = function(arg0, arg1) {
+        let deferred0_0;
+        let deferred0_1;
+        try {
+            deferred0_0 = arg0;
+            deferred0_1 = arg1;
+            const ret = JSON.parse(getStringFromWasm0(arg0, arg1));
+            return ret;
+        } finally {
+            wasm.__wbindgen_free(deferred0_0, deferred0_1, 1);
+        }
     };
     imports.wbg.__wbg_payloadentry_unwrap = function(arg0) {
         const ret = PayloadEntry.__unwrap(arg0);
         return ret;
     };
-    imports.wbg.__wbg_process_5c1d670bc53614b8 = function(arg0) {
+    imports.wbg.__wbg_process_dc0fbacc7c1c06f7 = function(arg0) {
         const ret = arg0.process;
         return ret;
     };
-    imports.wbg.__wbg_properties_b5c04e009472d312 = function(arg0) {
+    imports.wbg.__wbg_properties_68817af3e86f33b3 = function(arg0) {
         const ret = arg0.properties;
         return ret;
     };
-    imports.wbg.__wbg_push_737cfc8c1432c2c6 = function(arg0, arg1) {
+    imports.wbg.__wbg_prototypesetcall_a81ac58a5b6e988c = function(arg0, arg1, arg2) {
+        Uint8Array.prototype.set.call(getArrayU8FromWasm0(arg0, arg1), arg2);
+    };
+    imports.wbg.__wbg_publishdiddocument_new = function(arg0) {
+        const ret = PublishDidDocument.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_push_a625ffb414ba40f2 = function(arg0, arg1) {
         const ret = arg0.push(arg1);
         return ret;
     };
-    imports.wbg.__wbg_queueMicrotask_97d92b4fcc8a61c5 = function(arg0) {
+    imports.wbg.__wbg_queryEvents_d190550fb2d0e183 = function(arg0, arg1) {
+        const ret = arg0.queryEvents(arg1);
+        return ret;
+    };
+    imports.wbg.__wbg_queueMicrotask_1d75ffff194a09bc = function(arg0) {
         queueMicrotask(arg0);
     };
-    imports.wbg.__wbg_queueMicrotask_d3219def82552485 = function(arg0) {
+    imports.wbg.__wbg_queueMicrotask_b9a8d325fc1ebe35 = function(arg0) {
         const ret = arg0.queueMicrotask;
         return ret;
     };
-    imports.wbg.__wbg_randomFillSync_ab2cfe79ebbf2740 = function() { return handleError(function (arg0, arg1) {
+    imports.wbg.__wbg_randomFillSync_ac0988aba3254290 = function() { return handleError(function (arg0, arg1) {
         arg0.randomFillSync(arg1);
     }, arguments) };
-    imports.wbg.__wbg_require_79b1e9274cde3c87 = function() { return handleError(function () {
+    imports.wbg.__wbg_require_60cc747a6bc5215a = function() { return handleError(function () {
         const ret = module.require;
         return ret;
     }, arguments) };
-    imports.wbg.__wbg_resolve_4851785c9c5f573d = function(arg0) {
+    imports.wbg.__wbg_resolveDid_d625417775e96b98 = function(arg0, arg1) {
+        const ret = arg0.resolveDid(IotaDID.__wrap(arg1));
+        return ret;
+    };
+    imports.wbg.__wbg_resolve_5d19fd309fead71f = function() { return handleError(function (arg0, arg1, arg2) {
+        const ret = arg0.resolve(getStringFromWasm0(arg1, arg2));
+        return ret;
+    }, arguments) };
+    imports.wbg.__wbg_resolve_6d500d3f49144da0 = function() { return handleError(function (arg0, arg1, arg2) {
+        const ret = arg0.resolve(getStringFromWasm0(arg1, arg2));
+        return ret;
+    }, arguments) };
+    imports.wbg.__wbg_resolve_f9faa06f9350ac82 = function(arg0) {
         const ret = Promise.resolve(arg0);
         return ret;
     };
-    imports.wbg.__wbg_resolve_5a424f5dfe8306e6 = function() { return handleError(function (arg0, arg1, arg2) {
-        const ret = arg0.resolve(getStringFromWasm0(arg1, arg2));
-        return ret;
-    }, arguments) };
-    imports.wbg.__wbg_resolve_b1e54f2b56f6edda = function() { return handleError(function (arg0, arg1, arg2) {
-        const ret = arg0.resolve(getStringFromWasm0(arg1, arg2));
-        return ret;
-    }, arguments) };
     imports.wbg.__wbg_sdjwtv2_new = function(arg0) {
         const ret = SdJwtV2.__wrap(arg0);
         return ret;
@@ -13528,7 +17944,26 @@ function __wbg_get_imports() {
         const ret = SdJwtVc.__wrap(arg0);
         return ret;
     };
-    imports.wbg.__wbg_serviceEndpoint_fe1c5661890fd6e0 = function(arg0) {
+    imports.wbg.__wbg_send_c9ab44ec5d1ba26b = function() { return handleError(function (arg0, arg1) {
+        const ret = arg0.send(arg1);
+        return ret;
+    }, arguments) };
+    imports.wbg.__wbg_senderAddress_ab823c6c861b1417 = function(arg0, arg1) {
+        const ret = arg1.senderAddress();
+        const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+        getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+    };
+    imports.wbg.__wbg_senderPublicKey_73bc3b709a40e987 = function(arg0) {
+        const ret = arg0.senderPublicKey();
+        return ret;
+    };
+    imports.wbg.__wbg_sendproposal_new = function(arg0) {
+        const ret = SendProposal.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_serviceEndpoint_6677870bb73f79eb = function(arg0) {
         const ret = arg0.serviceEndpoint;
         return ret;
     };
@@ -13536,27 +17971,55 @@ function __wbg_get_imports() {
         const ret = Service.__wrap(arg0);
         return ret;
     };
-    imports.wbg.__wbg_set_37837023f3d740e8 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbg_setTimeout_2b339866a2aa3789 = function(arg0, arg1) {
+        const ret = setTimeout(arg0, arg1);
+        return ret;
+    };
+    imports.wbg.__wbg_set_038a8a067d895c6a = function(arg0, arg1, arg2) {
         arg0[arg1 >>> 0] = arg2;
     };
     imports.wbg.__wbg_set_3f1d0b984ed272ed = function(arg0, arg1, arg2) {
         arg0[arg1] = arg2;
     };
-    imports.wbg.__wbg_set_65595bdd868b3009 = function(arg0, arg1, arg2) {
-        arg0.set(arg1, arg2 >>> 0);
-    };
-    imports.wbg.__wbg_set_8fc6bf8a5b1071d1 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbg_set_a15b7b524330d4f1 = function(arg0, arg1, arg2) {
         const ret = arg0.set(arg1, arg2);
         return ret;
     };
-    imports.wbg.__wbg_setname_6df54b7ebf9404a9 = function(arg0, arg1, arg2) {
-        arg0.name = getStringFromWasm0(arg1, arg2);
-    };
-    imports.wbg.__wbg_sign_39bc3f2c0aeebe09 = function() { return handleError(function (arg0, arg1, arg2) {
-        const ret = arg0.sign(arg1, arg2);
+    imports.wbg.__wbg_set_d66063c1f1a1157e = function() { return handleError(function (arg0, arg1, arg2) {
+        const ret = Reflect.set(arg0, arg1, arg2);
         return ret;
     }, arguments) };
-    imports.wbg.__wbg_sign_ba528ba3a3e2c300 = function(arg0, arg1, arg2, arg3, arg4, arg5) {
+    imports.wbg.__wbg_setbody_eae092e0854ca08a = function(arg0, arg1) {
+        arg0.body = arg1;
+    };
+    imports.wbg.__wbg_setcache_70ccfaf96bf3bf74 = function(arg0, arg1) {
+        arg0.cache = __wbindgen_enum_RequestCache[arg1];
+    };
+    imports.wbg.__wbg_setcredentials_ddd888a46135fc55 = function(arg0, arg1) {
+        arg0.credentials = __wbindgen_enum_RequestCredentials[arg1];
+    };
+    imports.wbg.__wbg_setheaders_45a1a764e8a12c9e = function(arg0, arg1) {
+        arg0.headers = arg1;
+    };
+    imports.wbg.__wbg_setmethod_105ebdc42c30973c = function(arg0, arg1, arg2) {
+        arg0.method = getStringFromWasm0(arg1, arg2);
+    };
+    imports.wbg.__wbg_setmode_0bdbbe8e2bd4a045 = function(arg0, arg1) {
+        arg0.mode = __wbindgen_enum_RequestMode[arg1];
+    };
+    imports.wbg.__wbg_setname_717a9e3c923350a1 = function(arg0, arg1, arg2) {
+        arg0.name = getStringFromWasm0(arg1, arg2);
+    };
+    imports.wbg.__wbg_setsignal_bf1514f1b6ae2fd8 = function(arg0, arg1) {
+        arg0.signal = arg1;
+    };
+    imports.wbg.__wbg_sign_0fa9b3b4cf6d656e = function() { return handleError(function (arg0, arg1, arg2) {
+        var v0 = getArrayU8FromWasm0(arg1, arg2).slice();
+        wasm.__wbindgen_free(arg1, arg2 * 1, 1);
+        const ret = arg0.sign(v0);
+        return ret;
+    }, arguments) };
+    imports.wbg.__wbg_sign_2e52e11c67010f55 = function(arg0, arg1, arg2, arg3, arg4, arg5) {
         let deferred0_0;
         let deferred0_1;
         try {
@@ -13570,6 +18033,18 @@ function __wbg_get_imports() {
             wasm.__wbindgen_free(deferred0_0, deferred0_1, 1);
         }
     };
+    imports.wbg.__wbg_sign_e6d882c58e3f2c49 = function() { return handleError(function (arg0, arg1, arg2) {
+        const ret = arg0.sign(arg1, arg2);
+        return ret;
+    }, arguments) };
+    imports.wbg.__wbg_signal_50f939f8e2d92aa9 = function(arg0) {
+        const ret = arg0.signal;
+        return ret;
+    };
+    imports.wbg.__wbg_signer_33ecd5ac908da491 = function(arg0) {
+        const ret = arg0.signer();
+        return ret;
+    };
     imports.wbg.__wbg_stack_0ed75d68575b0f3c = function(arg0, arg1) {
         const ret = arg1.stack;
         const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -13577,39 +18052,76 @@ function __wbg_get_imports() {
         getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
         getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
     };
-    imports.wbg.__wbg_static_accessor_GLOBAL_88a902d13a557d07 = function() {
+    imports.wbg.__wbg_static_accessor_GLOBAL_656a564fb01c5b63 = function() {
         const ret = typeof global === 'undefined' ? null : global;
         return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
     };
-    imports.wbg.__wbg_static_accessor_GLOBAL_THIS_56578be7e9f832b0 = function() {
+    imports.wbg.__wbg_static_accessor_GLOBAL_THIS_09a6cc4b9571ef65 = function() {
         const ret = typeof globalThis === 'undefined' ? null : globalThis;
         return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
     };
-    imports.wbg.__wbg_static_accessor_SELF_37c5d418e4bf5819 = function() {
+    imports.wbg.__wbg_static_accessor_SELF_36742aea97854d74 = function() {
         const ret = typeof self === 'undefined' ? null : self;
         return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
     };
-    imports.wbg.__wbg_static_accessor_WINDOW_5de37043a91a9c40 = function() {
+    imports.wbg.__wbg_static_accessor_WINDOW_0ce0d90b0830e7e6 = function() {
         const ret = typeof window === 'undefined' ? null : window;
         return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
     };
-    imports.wbg.__wbg_subarray_aa9065fa9dc5df96 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbg_status_7fd748ec5eec290d = function(arg0) {
+        const ret = arg0.status;
+        return ret;
+    };
+    imports.wbg.__wbg_stringify_61d42b7d144137e4 = function() { return handleError(function (arg0) {
+        const ret = JSON.stringify(arg0);
+        return ret;
+    }, arguments) };
+    imports.wbg.__wbg_stringify_d1d430cc71d81bc4 = function(arg0, arg1) {
+        const ret = JSON.stringify(arg1);
+        var ptr1 = isLikeNone(ret) ? 0 : passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var len1 = WASM_VECTOR_LEN;
+        getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+        getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+    };
+    imports.wbg.__wbg_subarray_07c7c2b284d2102d = function(arg0, arg1, arg2) {
         const ret = arg0.subarray(arg1 >>> 0, arg2 >>> 0);
         return ret;
     };
-    imports.wbg.__wbg_then_44b73946d2fb3e7d = function(arg0, arg1) {
+    imports.wbg.__wbg_then_66350f316a20107b = function(arg0, arg1) {
         const ret = arg0.then(arg1);
         return ret;
     };
-    imports.wbg.__wbg_then_48b406749878a531 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbg_then_a8d64a36c84944e9 = function(arg0, arg1, arg2) {
         const ret = arg0.then(arg1, arg2);
         return ret;
     };
-    imports.wbg.__wbg_toString_c813bbd34d063839 = function(arg0) {
+    imports.wbg.__wbg_toIotaPublicKey_1df7888089bbe88e = function(arg0, arg1) {
+        const ret = arg1.toIotaPublicKey();
+        const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+        getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+    };
+    imports.wbg.__wbg_toString_212ed1a09015116e = function(arg0) {
         const ret = arg0.toString();
         return ret;
     };
-    imports.wbg.__wbg_type_92770093a549789d = function(arg0) {
+    imports.wbg.__wbg_tostring_d50b87e33634e806 = function(arg0, arg1) {
+        const ret = arg1.to_string();
+        const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+        getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+    };
+    imports.wbg.__wbg_transactionbuilder_new = function(arg0) {
+        const ret = TransactionBuilder.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_transactionoutput_new = function(arg0) {
+        const ret = TransactionOutput.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_type_9644c5094ad9324f = function(arg0) {
         const ret = arg0.type;
         return ret;
     };
@@ -13621,7 +18133,18 @@ function __wbg_get_imports() {
         const ret = UnknownCredential.__wrap(arg0);
         return ret;
     };
-    imports.wbg.__wbg_value_cd1ffa7b1ab794f1 = function(arg0) {
+    imports.wbg.__wbg_updatedidproposal_new = function(arg0) {
+        const ret = UpdateDidProposal.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_url_6c91002a6358b1ec = function(arg0, arg1) {
+        const ret = arg1.url;
+        const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+        getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+    };
+    imports.wbg.__wbg_value_4ae21701b6f5c482 = function(arg0) {
         const ret = arg0.value;
         return ret;
     };
@@ -13629,7 +18152,7 @@ function __wbg_get_imports() {
         const ret = VerificationMethod.__wrap(arg0);
         return ret;
     };
-    imports.wbg.__wbg_verify_d3dff71862e86778 = function() { return handleError(function (arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
+    imports.wbg.__wbg_verify_5a48dd9d331fcc4e = function() { return handleError(function (arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
         let deferred0_0;
         let deferred0_1;
         try {
@@ -13644,34 +18167,45 @@ function __wbg_get_imports() {
             wasm.__wbindgen_free(deferred0_0, deferred0_1, 1);
         }
     }, arguments) };
-    imports.wbg.__wbg_versions_c71aa1626a93e0a1 = function(arg0) {
+    imports.wbg.__wbg_version_f571e66362a1196a = function(arg0, arg1) {
+        const ret = arg1.version;
+        const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+        getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+    };
+    imports.wbg.__wbg_versions_c01dfd4722a88165 = function(arg0) {
         const ret = arg0.versions;
         return ret;
     };
-    imports.wbg.__wbindgen_as_number = function(arg0) {
-        const ret = +arg0;
+    imports.wbg.__wbg_waitForTransaction_9acd4a4b0268c865 = function(arg0, arg1) {
+        const ret = arg0.waitForTransaction(arg1);
         return ret;
     };
-    imports.wbg.__wbindgen_bigint_from_i64 = function(arg0) {
-        const ret = arg0;
+    imports.wbg.__wbg_wasmaccesssubidentitytx_new = function(arg0) {
+        const ret = WasmAccessSubIdentityTx.__wrap(arg0);
         return ret;
     };
-    imports.wbg.__wbindgen_bigint_from_u64 = function(arg0) {
-        const ret = BigInt.asUintN(64, arg0);
+    imports.wbg.__wbg_wasmapproveaccesssubidentityproposal_new = function(arg0) {
+        const ret = WasmApproveAccessSubIdentityProposal.__wrap(arg0);
         return ret;
     };
-    imports.wbg.__wbindgen_bigint_get_as_i64 = function(arg0, arg1) {
+    imports.wbg.__wbg_wasmmanagedcoreclientreadonly_new = function(arg0) {
+        const ret = WasmManagedCoreClientReadOnly.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_wbindgenbigintgetasi64_d3d568a64e846827 = function(arg0, arg1) {
         const v = arg1;
         const ret = typeof(v) === 'bigint' ? v : undefined;
         getDataViewMemory0().setBigInt64(arg0 + 8 * 1, isLikeNone(ret) ? BigInt(0) : ret, true);
         getDataViewMemory0().setInt32(arg0 + 4 * 0, !isLikeNone(ret), true);
     };
-    imports.wbg.__wbindgen_boolean_get = function(arg0) {
+    imports.wbg.__wbg_wbindgenbooleanget_527bfac1bf7c06df = function(arg0) {
         const v = arg0;
-        const ret = typeof(v) === 'boolean' ? (v ? 1 : 0) : 2;
-        return ret;
+        const ret = typeof(v) === 'boolean' ? v : undefined;
+        return isLikeNone(ret) ? 0xFFFFFF : ret ? 1 : 0;
     };
-    imports.wbg.__wbindgen_cb_drop = function(arg0) {
+    imports.wbg.__wbg_wbindgencbdrop_470850fcb28f4519 = function(arg0) {
         const obj = arg0.original;
         if (obj.cnt-- == 1) {
             obj.a = 0;
@@ -13680,23 +18214,107 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper6663 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 758, __wbg_adapter_56);
-        return ret;
-    };
-    imports.wbg.__wbindgen_debug_string = function(arg0, arg1) {
+    imports.wbg.__wbg_wbindgendebugstring_0c28a61befa1f3ce = function(arg0, arg1) {
         const ret = debugString(arg1);
         const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len1 = WASM_VECTOR_LEN;
         getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
         getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
     };
-    imports.wbg.__wbindgen_error_new = function(arg0, arg1) {
-        const ret = new Error(getStringFromWasm0(arg0, arg1));
+    imports.wbg.__wbg_wbindgenin_ed944d66e9a43ef2 = function(arg0, arg1) {
+        const ret = arg0 in arg1;
         return ret;
     };
-    imports.wbg.__wbindgen_in = function(arg0, arg1) {
-        const ret = arg0 in arg1;
+    imports.wbg.__wbg_wbindgenisbigint_1a3fbe7ad37b3968 = function(arg0) {
+        const ret = typeof(arg0) === 'bigint';
+        return ret;
+    };
+    imports.wbg.__wbg_wbindgenisfunction_27a5c72d80bbdf07 = function(arg0) {
+        const ret = typeof(arg0) === 'function';
+        return ret;
+    };
+    imports.wbg.__wbg_wbindgenisobject_bdb9aa7f2dd707ef = function(arg0) {
+        const val = arg0;
+        const ret = typeof(val) === 'object' && val !== null;
+        return ret;
+    };
+    imports.wbg.__wbg_wbindgenisstring_55b63daa584dc807 = function(arg0) {
+        const ret = typeof(arg0) === 'string';
+        return ret;
+    };
+    imports.wbg.__wbg_wbindgenisundefined_2e902cd900cf5927 = function(arg0) {
+        const ret = arg0 === undefined;
+        return ret;
+    };
+    imports.wbg.__wbg_wbindgenjsvaleq_af67af1ed6574f4f = function(arg0, arg1) {
+        const ret = arg0 === arg1;
+        return ret;
+    };
+    imports.wbg.__wbg_wbindgenjsvallooseeq_4f1ced8136023b79 = function(arg0, arg1) {
+        const ret = arg0 == arg1;
+        return ret;
+    };
+    imports.wbg.__wbg_wbindgennumberget_41a5988c9fc46eeb = function(arg0, arg1) {
+        const obj = arg1;
+        const ret = typeof(obj) === 'number' ? obj : undefined;
+        getDataViewMemory0().setFloat64(arg0 + 8 * 1, isLikeNone(ret) ? 0 : ret, true);
+        getDataViewMemory0().setInt32(arg0 + 4 * 0, !isLikeNone(ret), true);
+    };
+    imports.wbg.__wbg_wbindgenstringget_c45e0c672ada3c64 = function(arg0, arg1) {
+        const obj = arg1;
+        const ret = typeof(obj) === 'string' ? obj : undefined;
+        var ptr1 = isLikeNone(ret) ? 0 : passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var len1 = WASM_VECTOR_LEN;
+        getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+        getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+    };
+    imports.wbg.__wbg_wbindgenthrow_681185b504fabc8e = function(arg0, arg1) {
+        throw new Error(getStringFromWasm0(arg0, arg1));
+    };
+    imports.wbg.__wbg_wbindgentypeof_c4d20c88dc9b8a54 = function(arg0) {
+        const ret = typeof arg0;
+        return ret;
+    };
+    imports.wbg.__wbindgen_cast_2241b6af4c4b2941 = function(arg0, arg1) {
+        // Cast intrinsic for `Ref(String) -> Externref`.
+        const ret = getStringFromWasm0(arg0, arg1);
+        return ret;
+    };
+    imports.wbg.__wbindgen_cast_4625c577ab2ec9ee = function(arg0) {
+        // Cast intrinsic for `U64 -> Externref`.
+        const ret = BigInt.asUintN(64, arg0);
+        return ret;
+    };
+    imports.wbg.__wbindgen_cast_47e787271e8de321 = function(arg0, arg1) {
+        // Cast intrinsic for `Closure(Closure { dtor_idx: 4442, function: Function { arguments: [Externref], shim_idx: 4453, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+        const ret = makeMutClosure(arg0, arg1, 4442, __wbg_adapter_19);
+        return ret;
+    };
+    imports.wbg.__wbindgen_cast_4c38944df5d47377 = function(arg0, arg1) {
+        // Cast intrinsic for `Closure(Closure { dtor_idx: 4435, function: Function { arguments: [], shim_idx: 4436, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+        const ret = makeMutClosure(arg0, arg1, 4435, __wbg_adapter_6);
+        return ret;
+    };
+    imports.wbg.__wbindgen_cast_77bc3e92745e9a35 = function(arg0, arg1) {
+        var v0 = getArrayU8FromWasm0(arg0, arg1).slice();
+        wasm.__wbindgen_free(arg0, arg1 * 1, 1);
+        // Cast intrinsic for `Vector(U8) -> Externref`.
+        const ret = v0;
+        return ret;
+    };
+    imports.wbg.__wbindgen_cast_9ae0607507abb057 = function(arg0) {
+        // Cast intrinsic for `I64 -> Externref`.
+        const ret = arg0;
+        return ret;
+    };
+    imports.wbg.__wbindgen_cast_cb9088102bce6b30 = function(arg0, arg1) {
+        // Cast intrinsic for `Ref(Slice(U8)) -> NamedExternref("Uint8Array")`.
+        const ret = getArrayU8FromWasm0(arg0, arg1);
+        return ret;
+    };
+    imports.wbg.__wbindgen_cast_d6cd19b81560fd6e = function(arg0) {
+        // Cast intrinsic for `F64 -> Externref`.
+        const ret = arg0;
         return ret;
     };
     imports.wbg.__wbindgen_init_externref_table = function() {
@@ -13708,76 +18326,6 @@ function __wbg_get_imports() {
         table.set(offset + 2, true);
         table.set(offset + 3, false);
         ;
-    };
-    imports.wbg.__wbindgen_is_bigint = function(arg0) {
-        const ret = typeof(arg0) === 'bigint';
-        return ret;
-    };
-    imports.wbg.__wbindgen_is_function = function(arg0) {
-        const ret = typeof(arg0) === 'function';
-        return ret;
-    };
-    imports.wbg.__wbindgen_is_object = function(arg0) {
-        const val = arg0;
-        const ret = typeof(val) === 'object' && val !== null;
-        return ret;
-    };
-    imports.wbg.__wbindgen_is_string = function(arg0) {
-        const ret = typeof(arg0) === 'string';
-        return ret;
-    };
-    imports.wbg.__wbindgen_is_undefined = function(arg0) {
-        const ret = arg0 === undefined;
-        return ret;
-    };
-    imports.wbg.__wbindgen_json_parse = function(arg0, arg1) {
-        const ret = JSON.parse(getStringFromWasm0(arg0, arg1));
-        return ret;
-    };
-    imports.wbg.__wbindgen_json_serialize = function(arg0, arg1) {
-        const obj = arg1;
-        const ret = JSON.stringify(obj === undefined ? null : obj);
-        const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-        const len1 = WASM_VECTOR_LEN;
-        getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
-        getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
-    };
-    imports.wbg.__wbindgen_jsval_eq = function(arg0, arg1) {
-        const ret = arg0 === arg1;
-        return ret;
-    };
-    imports.wbg.__wbindgen_jsval_loose_eq = function(arg0, arg1) {
-        const ret = arg0 == arg1;
-        return ret;
-    };
-    imports.wbg.__wbindgen_memory = function() {
-        const ret = wasm.memory;
-        return ret;
-    };
-    imports.wbg.__wbindgen_number_get = function(arg0, arg1) {
-        const obj = arg1;
-        const ret = typeof(obj) === 'number' ? obj : undefined;
-        getDataViewMemory0().setFloat64(arg0 + 8 * 1, isLikeNone(ret) ? 0 : ret, true);
-        getDataViewMemory0().setInt32(arg0 + 4 * 0, !isLikeNone(ret), true);
-    };
-    imports.wbg.__wbindgen_number_new = function(arg0) {
-        const ret = arg0;
-        return ret;
-    };
-    imports.wbg.__wbindgen_string_get = function(arg0, arg1) {
-        const obj = arg1;
-        const ret = typeof(obj) === 'string' ? obj : undefined;
-        var ptr1 = isLikeNone(ret) ? 0 : passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-        var len1 = WASM_VECTOR_LEN;
-        getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
-        getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
-    };
-    imports.wbg.__wbindgen_string_new = function(arg0, arg1) {
-        const ret = getStringFromWasm0(arg0, arg1);
-        return ret;
-    };
-    imports.wbg.__wbindgen_throw = function(arg0, arg1) {
-        throw new Error(getStringFromWasm0(arg0, arg1));
     };
 
     return imports;

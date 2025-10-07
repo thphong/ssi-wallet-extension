@@ -2,25 +2,25 @@
 /* eslint-disable */
 /**
 * Creates a method handler with the given client options.
-* @param {string} clientOptions
-* @returns {ClientMethodHandler}
+* @param {string} options
+* @returns {Promise<ClientMethodHandler>}
 */
-export function createClient(clientOptions: string): ClientMethodHandler;
+export function createClient(options: string): Promise<ClientMethodHandler>;
 /**
 * Necessary for compatibility with the node.js bindings.
-* @param {ClientMethodHandler} _client_method_handler
+* @param {ClientMethodHandler} method_handler
 * @returns {Promise<void>}
 */
-export function destroyClient(_client_method_handler: ClientMethodHandler): Promise<void>;
+export function destroyClient(method_handler: ClientMethodHandler): Promise<void>;
 /**
 * Handles a method, returns the response as a JSON-encoded string.
 *
 * Returns an error if the response itself is an error or panic.
+* @param {ClientMethodHandler} method_handler
 * @param {string} method
-* @param {ClientMethodHandler} methodHandler
 * @returns {Promise<string>}
 */
-export function callClientMethodAsync(method: string, methodHandler: ClientMethodHandler): Promise<string>;
+export function callClientMethod(method_handler: ClientMethodHandler, method: string): Promise<string>;
 /**
 * MQTT is not supported for WebAssembly bindings.
 *
@@ -28,8 +28,9 @@ export function callClientMethodAsync(method: string, methodHandler: ClientMetho
 * with the Node.js bindings TypeScript definitions.
 * @param {string[]} _topics
 * @param {Function} _callback
+* @returns {Promise<void>}
 */
-export function listenMqtt(_topics: string[], _callback: Function): void;
+export function listenMqtt(_topics: string[], _callback: Function): Promise<void>;
 /**
 * Creates a method handler with the given secret_manager options.
 * @param {string} options
@@ -40,11 +41,11 @@ export function createSecretManager(options: string): SecretManagerMethodHandler
 * Handles a method, returns the response as a JSON-encoded string.
 *
 * Returns an error if the response itself is an error or panic.
+* @param {SecretManagerMethodHandler} method_handler
 * @param {string} method
-* @param {SecretManagerMethodHandler} methodHandler
 * @returns {Promise<string>}
 */
-export function callSecretManagerMethodAsync(method: string, methodHandler: SecretManagerMethodHandler): Promise<string>;
+export function callSecretManagerMethod(method_handler: SecretManagerMethodHandler, method: string): Promise<string>;
 /**
 * Stronghold snapshot migration is not supported for WebAssembly bindings.
 *
@@ -63,15 +64,15 @@ export function migrateStrongholdSnapshotV2ToV3(_current_path: string, _current_
 *
 * Returns an error if the response itself is an error or panic.
 * @param {string} method
-* @returns {any}
+* @returns {string}
 */
-export function callUtilsMethodRust(method: string): any;
+export function callUtilsMethodRust(method: string): string;
 /**
 * Creates a method handler with the given options.
 * @param {string} options
-* @returns {WalletMethodHandler}
+* @returns {Promise<WalletMethodHandler>}
 */
-export function createWallet(options: string): WalletMethodHandler;
+export function createWallet(options: string): Promise<WalletMethodHandler>;
 /**
 * @param {WalletMethodHandler} method_handler
 * @returns {Promise<void>}
@@ -81,21 +82,21 @@ export function destroyWallet(method_handler: WalletMethodHandler): Promise<void
 * @param {WalletMethodHandler} method_handler
 * @returns {Promise<ClientMethodHandler>}
 */
-export function getClientFromWallet(method_handler: WalletMethodHandler): Promise<ClientMethodHandler>;
+export function getClient(method_handler: WalletMethodHandler): Promise<ClientMethodHandler>;
 /**
 * @param {WalletMethodHandler} method_handler
 * @returns {Promise<SecretManagerMethodHandler>}
 */
-export function getSecretManagerFromWallet(method_handler: WalletMethodHandler): Promise<SecretManagerMethodHandler>;
+export function getSecretManager(method_handler: WalletMethodHandler): Promise<SecretManagerMethodHandler>;
 /**
 * Handles a method, returns the response as a JSON-encoded string.
 *
 * Returns an error if the response itself is an error or panic.
-* @param {string} method
 * @param {WalletMethodHandler} method_handler
+* @param {string} method
 * @returns {Promise<string>}
 */
-export function callWalletMethodAsync(method: string, method_handler: WalletMethodHandler): Promise<string>;
+export function callWalletMethod(method_handler: WalletMethodHandler, method: string): Promise<string>;
 /**
 * It takes a list of event types, registers a callback function, and then listens for events of those
 * types
@@ -105,21 +106,12 @@ export function callWalletMethodAsync(method: string, method_handler: WalletMeth
 * * `vec`: An array of strings that represent the event types you want to listen to.
 * * `callback`: A JavaScript function that will be called when a wallet event occurs.
 * * `method_handler`: This is the same method handler that we used in the previous section.
+* @param {WalletMethodHandler} method_handler
 * @param {Array<any>} vec
 * @param {Function} callback
-* @param {WalletMethodHandler} method_handler
 * @returns {Promise<any>}
 */
-export function listenWalletAsync(vec: Array<any>, callback: Function, method_handler: WalletMethodHandler): Promise<any>;
-/**
-* Rocksdb chrysalis migration is not supported for WebAssembly bindings.
-*
-* Throws an error if called, only included for compatibility
-* with the Node.js bindings TypeScript definitions.
-* @param {string} _storage_path
-* @param {string | undefined} [_password]
-*/
-export function migrateDbChrysalisToStardust(_storage_path: string, _password?: string): void;
+export function listenWallet(method_handler: WalletMethodHandler, vec: Array<any>, callback: Function): Promise<any>;
 /**
 * Initializes the console error panic hook for better panic messages.
 * Gets automatically called when using wasm
@@ -157,23 +149,22 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
   readonly __wbg_clientmethodhandler_free: (a: number) => void;
-  readonly createClient: (a: number, b: number, c: number) => void;
+  readonly createClient: (a: number, b: number) => number;
   readonly destroyClient: (a: number) => number;
-  readonly callClientMethodAsync: (a: number, b: number, c: number, d: number) => void;
-  readonly listenMqtt: (a: number, b: number, c: number) => void;
+  readonly callClientMethod: (a: number, b: number, c: number) => number;
+  readonly listenMqtt: (a: number, b: number) => number;
   readonly __wbg_secretmanagermethodhandler_free: (a: number) => void;
   readonly createSecretManager: (a: number, b: number, c: number) => void;
-  readonly callSecretManagerMethodAsync: (a: number, b: number, c: number, d: number) => void;
+  readonly callSecretManagerMethod: (a: number, b: number, c: number) => number;
   readonly migrateStrongholdSnapshotV2ToV3: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => void;
   readonly callUtilsMethodRust: (a: number, b: number, c: number) => void;
   readonly __wbg_walletmethodhandler_free: (a: number) => void;
-  readonly createWallet: (a: number, b: number, c: number) => void;
+  readonly createWallet: (a: number, b: number) => number;
   readonly destroyWallet: (a: number) => number;
-  readonly getClientFromWallet: (a: number) => number;
-  readonly getSecretManagerFromWallet: (a: number) => number;
-  readonly callWalletMethodAsync: (a: number, b: number, c: number) => number;
-  readonly listenWalletAsync: (a: number, b: number, c: number) => number;
-  readonly migrateDbChrysalisToStardust: (a: number, b: number, c: number, d: number, e: number) => void;
+  readonly getClient: (a: number) => number;
+  readonly getSecretManager: (a: number) => number;
+  readonly callWalletMethod: (a: number, b: number, c: number) => number;
+  readonly listenWallet: (a: number, b: number, c: number) => number;
   readonly start: () => void;
   readonly initLogger: (a: number, b: number) => number;
   readonly __wbindgen_export_0: (a: number, b: number) => number;

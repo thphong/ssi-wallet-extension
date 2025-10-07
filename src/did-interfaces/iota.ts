@@ -1,3 +1,4 @@
+
 import init from "@iota/sdk-wasm/web";
 import * as identity from "@iota/identity-wasm/web";
 
@@ -9,6 +10,4 @@ export async function loadWasm() {
     await identity.init(wasmUrl);
 }
 
-(async () => {
-    await loadWasm();
-})();
+loadWasm();
