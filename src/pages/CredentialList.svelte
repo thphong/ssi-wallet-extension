@@ -29,7 +29,7 @@
             bind:selected={cred.selected}
             on:change={onGetSelection}
         >
-            <span slot="custom-meta">
+            <span slot="custom-meta" class="custom-meta">
                 <span>Issuer: {shortenDid(cred.issuer, 31)}</span>
                 <span>Issue Date: {formatDate(cred.issuanceDate)}</span>
                 {#if cred.expirationDate}
@@ -63,5 +63,9 @@
         color: #3a3a3b;
         font-size: 13.33px;
         padding: 1rem 0;
+    }
+
+    .custom-meta {
+        display: grid;
     }
 </style>
