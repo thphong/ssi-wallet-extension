@@ -1,8 +1,7 @@
 <script lang="ts">
     import { type VC } from "did-core-sdk";
-    import JsonViewer from "../components/JsonViewer.svelte";
     import { shortenDid, formatDate } from "../libs/utils";
-    import { downloadJSON } from "../libs/utils";
+    import JsonCard from "../components/JsonCard.svelte";
     export let credentials: any[] = [];
     export let selectedVCs: VC[] = [];
     export let needSelection = false;
@@ -20,47 +19,26 @@
     </div>
 {:else}
     {#each [...credentials].reverse().slice(0, maxIndex) as cred}
-        <div class="credential-card">
-            <div class="cred-header">
-                Credential Subject:
-                <div class="group-icon">
-                    <button
-                        class="icon-btn icon-btn-small"
-                        on:click={() => downloadJSON(cred, "credential.json")}
-                    >
-                        <img
-                            src="/assets/download.png"
-                            alt="download"
-                            class="icon"
-                        />
-                    </button>
-                    {#if needSelection}
-                        <input
-                            type="checkbox"
-                            bind:checked={cred.selected}
-                            on:change={onGetSelection}
-                        />
-                    {/if}
-                </div>
-            </div>
-
-            <div>
-                <JsonViewer data={cred.credentialSubject} collapsedAt={1} />
-            </div>
-            <div class="cred-meta">
-                <span class="cred-issuer"
-                    >Issuer: {shortenDid(cred.issuer, 31)}</span
-                >
-                <span class="cred-date"
-                    >Issue Date: {formatDate(cred.issuanceDate)}</span
-                >
+        <JsonCard
+            dataDisplay={cred.credentialSubject}
+            dataContent={cred}
+            collapsedAt={1}
+            title={"Credential Subject:"}
+            downloadFilename={"credential.json"}
+            {needSelection}
+            bind:selected={cred.selected}
+            on:change={onGetSelection}
+        >
+            <span slot="custom-meta">
+                <span>Issuer: {shortenDid(cred.issuer, 31)}</span>
+                <span>Issue Date: {formatDate(cred.issuanceDate)}</span>
                 {#if cred.expirationDate}
-                    <span class="expire-date"
+                    <span class="bold"
                         >Expired Date: {formatDate(cred.expirationDate)}</span
                     >
                 {/if}
-            </div>
-        </div>
+            </span>
+        </JsonCard>
     {/each}
     {#if credentials.length > maxIndex}
         <button
@@ -85,39 +63,5 @@
         color: #3a3a3b;
         font-size: 13.33px;
         padding: 1rem 0;
-    }
-    .credential-card {
-        border: 1px solid #d1d5db;
-        border-radius: 10px;
-        padding: 0.75rem;
-        margin-bottom: 0.75rem;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-    }
-
-    .cred-meta {
-        font-size: 13px;
-        color: #3a3a3b;
-        display: grid;
-        justify-content: space-between;
-    }
-
-    .cred-header {
-        font-size: 13px;
-        color: #3a3a3b;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-    .expire-date {
-        font-weight: bold;
-    }
-
-    .group-icon {
-        display: flex;
-        column-gap: 5px;
-    }
-
-    input[type="checkbox"] {
-        width: 16px;
     }
 </style>

@@ -14,23 +14,15 @@
         <div class="row">
             <div>
                 <div class="label">Network</div>
-                <div class="sub">Shimmer Testnet</div>
+                <div class="sub">network to store did doccument</div>
             </div>
-            <span class="chip">Testnet</span>
-        </div>
-        <hr />
-        <div class="row">
-            <div>
-                <div class="label">Currency</div>
-                <div class="sub">IOTA</div>
-            </div>
-            <div class="muted">Default</div>
+            <span class="chip">IOTA Testnet</span>
         </div>
         <hr />
         <div class="row">
             <div>
                 <div class="label">Security</div>
-                <div class="sub">Lock after 5 minutes</div>
+                <div class="sub">Lock after 1 day</div>
             </div>
             <button class="link">Change</button>
         </div>

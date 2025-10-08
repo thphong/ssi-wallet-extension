@@ -25,7 +25,10 @@
     let submitting = false;
     let IsValidPassword = true;
 
-    $: isValidForm = nonce.trim().length > 0 && IsValidPassword;
+    $: isValidForm =
+        nonce.trim().length > 0 &&
+        password.trim().length > 0 &&
+        IsValidPassword;
 
     async function onCheckPassword() {
         if (!password) {

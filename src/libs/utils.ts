@@ -35,9 +35,20 @@ export function formatDate(dateStr: string): string {
   }).format(date).replace(/\s/g, "-");
 }
 
+export function toDisplayString(content: unknown): string {
+  if (typeof content === "string") {
+    return content.trim();
+  }
+  try {
+    return JSON.stringify(content, null, 2); // formatted JSON
+  } catch {
+    return String(content); // fallback for circular structures
+  }
+}
+
 export function downloadJSON(obj: any, filename = "data.json") {
   // Convert object → JSON string
-  const jsonStr = JSON.stringify(obj, null, 2);
+  const jsonStr = toDisplayString(obj);
 
   // Create a Blob from the string
   const blob = new Blob([jsonStr], { type: "application/json" });

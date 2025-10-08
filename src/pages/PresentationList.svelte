@@ -1,8 +1,8 @@
 <script lang="ts">
     import { type VP } from "did-core-sdk";
     import JsonViewer from "../components/JsonViewer.svelte";
+    import JsonCard from "../components/JsonCard.svelte";
     import { shortenDid } from "../libs/utils";
-    import { downloadJSON } from "../libs/utils";
     export let presentations: VP[] = [];
     export let maxIndex = 1;
     export let stepIndex = 2;
@@ -14,35 +14,31 @@
     </div>
 {:else}
     {#each [...presentations].reverse().slice(0, maxIndex) as pre}
-        <div class="credential-card">
-            <div class="cred-header">
-                Credential Subjects:
-                <button
-                    class="icon-btn icon-btn-small"
-                    on:click={() => downloadJSON(pre, "presentation.json")}
-                >
-                    <img
-                        src="/assets/download.png"
-                        alt="download"
-                        class="icon"
-                    />
-                </button>
+        <JsonCard
+            dataContent={pre}
+            collapsedAt={1}
+            title={"Credential Subjects:"}
+            downloadFilename={"presentation.json"}
+        >
+            <div slot="custom-display">
+                {#each pre.verifiableCredential as vc}
+                    <div class="break-text">
+                        <JsonViewer
+                            data={vc.credentialSubject}
+                            collapsedAt={1}
+                        />
+                    </div>
+                    <div class="cred-meta">
+                        <span class="cred-issuer"
+                            >Issuer: {shortenDid(vc.issuer, 31)}</span
+                        >
+                    </div>
+                {/each}
             </div>
-
-            {#each pre.verifiableCredential as vc}
-                <div>
-                    <JsonViewer data={vc.credentialSubject} collapsedAt={1} />
-                </div>
-                <div class="cred-meta">
-                    <span class="cred-issuer"
-                        >Issuer: {shortenDid(vc.issuer, 31)}</span
-                    >
-                </div>
-            {/each}
-            <div class="cred-meta">
+            <span slot="custom-meta">
                 <span class="cred-date">Nonce: {pre.challenge}</span>
-            </div>
-        </div>
+            </span>
+        </JsonCard>
     {/each}
     {#if presentations.length > maxIndex}
         <button
@@ -67,13 +63,6 @@
         color: #3a3a3b;
         font-size: 13.33px;
         padding: 1rem 0;
-    }
-    .credential-card {
-        border: 1px solid #d1d5db;
-        border-radius: 10px;
-        padding: 0.75rem;
-        margin-bottom: 0.75rem;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     }
     .cred-meta {
         font-size: 13px;

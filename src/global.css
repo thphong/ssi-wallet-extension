@@ -191,5 +191,30 @@ button {
     font-size: 14px;
     padding: 10px 5px 10px 5px;
     font-weight: bold;
+}
 
+.break-text {
+    white-space: pre-wrap;
+    /* keep indentation but allow wrapping */
+    overflow-wrap: anywhere;
+    /* break very long tokens (e.g., JWS) */
+    word-break: break-word;
+    /* fallback for older browsers */
+    line-break: anywhere;
+}
+
+.card-box {
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+input[type="checkbox"] {
+    width: 16px;
+}
+
+.bold {
+    font-weight: bold;
 }

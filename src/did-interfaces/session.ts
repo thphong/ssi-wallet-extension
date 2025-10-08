@@ -8,7 +8,7 @@ export const triggerRefreshSession = writable<number>(Date.now());
 
 const dbInstance: IndexedDb = IndexedDb.getInstance();
 
-const SESSION_TTL_MS = 2 * 24 * 60 * 60 * 1000; // 2 days
+const SESSION_TTL_MS = 1 * 24 * 60 * 60 * 1000; // 2 days
 const messageOK = toArrayBuffer(new TextEncoder().encode("Ok"));
 
 // ---- DB index helpers (work with either index-API or value-API) ----

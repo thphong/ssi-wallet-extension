@@ -17,7 +17,7 @@
     export let route: string;
 
     let selectedVCs: VC[] = [];
-    let maxIndex = 2;
+    let maxIndex = 1;
 
     currentUser.subscribe((user) => {
         if (user) {
