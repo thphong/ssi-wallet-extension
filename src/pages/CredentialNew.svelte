@@ -7,10 +7,7 @@
     import { createVC, resolveDid } from "did-core-sdk";
     import { currentUser } from "../did-interfaces/users";
     import { loadPrivateKey } from "../did-interfaces/encrypt";
-    import {
-        addOwnCredential,
-        addDeliveryCredential,
-    } from "../did-interfaces/credential";
+    import { addDeliveryCredential } from "../did-interfaces/credential";
 
     export let route: string;
 
@@ -83,7 +80,6 @@
         submitting = true;
         const pk = await loadPrivateKey(dataInput.issuer, password);
         const vc = await createVC(dataInput, pk);
-        await addOwnCredential(dataInput.issuer, vc);
         await addDeliveryCredential(dataInput.issuer, vc);
         route = ROUTES.CREDENTIAL;
     }

@@ -168,6 +168,11 @@ button {
     padding-left: 5px;
 }
 
+.sucesss-message {
+    color: #099b5e;
+    padding-left: 5px;
+}
+
 .input {
     height: 25px;
 }

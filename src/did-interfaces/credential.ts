@@ -35,7 +35,7 @@ export async function getOwnCredentials(did: string): Promise<VC[]> {
 export async function addDeliveryCredential(did: string, cre: VC) {
     let credentials = await getDeliveryCredentials(did);
     credentials.push(cre);
-    listOwnCredentials.set(credentials);
+    listDeliveryCredentials.set(credentials);
     await dbInstance.saveValue(getKeyDeliveryCredential(did), credentials);
 }
 

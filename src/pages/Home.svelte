@@ -26,10 +26,18 @@
     <div class="list-header">Your did:</div>
     <QrDid {did} />
     <div class="list-header">Your public key:</div>
-    <JsonCard dataDisplay={publicKey} dataContent={publicKey} collapsedAt={-1}
+    <JsonCard
+        dataDisplay={publicKey}
+        dataContent={publicKey}
+        collapsedAt={-1}
+        downloadFilename={"public-key.json"}
     ></JsonCard>
     <div class="list-header">Your did document:</div>
-    <JsonCard dataDisplay={didDoc} dataContent={didDoc} collapsedAt={-1}
+    <JsonCard
+        dataDisplay={didDoc}
+        dataContent={didDoc}
+        collapsedAt={-1}
+        downloadFilename={"DID-document.json"}
     ></JsonCard>
 </section>
 
