@@ -51,13 +51,13 @@ body {
     cursor: auto;
 }
 
-@media screen and (max-width: 360px) {
+@media screen and (max-width: 500px) {
     .icon-btn.expand-icon {
         display: grid;
     }
 }
 
-@media screen and (min-width: 361px) {
+@media screen and (min-width: 501px) {
     .icon-btn.expand-icon {
         display: none;
     }
@@ -218,6 +218,7 @@ button {
 
 input[type="checkbox"] {
     width: 16px;
+    cursor: pointer;
 }
 
 .bold {

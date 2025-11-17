@@ -70,12 +70,4 @@
         display: grid;
         justify-content: space-between;
     }
-
-    .cred-header {
-        font-size: 13px;
-        color: #3a3a3b;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
 </style>

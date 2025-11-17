@@ -1,5 +1,5 @@
 // app/keys.ts
-import { deriveStoreKey, encryptAesGcm, decryptAesGcm, randomBytes, arrayBufferToJwk, stringToArrayBuffer, arrayBufferToString } from "did-core-sdk";
+import { deriveStoreKey, encryptAesGcm, decryptAesGcm, randomBytes, arrayBufferToJwk } from "did-core-sdk";
 import { IndexedDb } from "../libs/indexed-db";
 import { type SecretRecord } from "../types/types";
 
