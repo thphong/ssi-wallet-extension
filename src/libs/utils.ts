@@ -47,6 +47,8 @@ export function toDisplayString(content: unknown): string {
 }
 
 export function downloadJSON(obj: any, filename = "data.json") {
+  //remove selected property
+  obj = (({ selected, ...rest }) => rest)(obj);
   // Convert object → JSON string
   const jsonStr = toDisplayString(obj);
 
