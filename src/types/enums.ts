@@ -7,5 +7,6 @@ export const ROUTES = {
     CREDENTIAL_CREATE: "credential-create",
     PRESENTATION: "presentation",
     PRESENTATION_CREATE: "presentation-create",
-    VERIFY: "verify"
+    VERIFY: "verify",
+    EXTERNAL_LOGIN: "login"
 }

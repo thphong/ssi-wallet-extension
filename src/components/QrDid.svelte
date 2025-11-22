@@ -39,7 +39,7 @@
 <div class="space-y-2 center">
     <canvas bind:this={canvasEl} aria-label="DID QR code" />
     <div class="text-xs break-all flex">
-        {shortenDid(did, 41)}
+        {shortenDid(did, 37)}
         <span class="margin-5"><CopyButton content={did} /></span>
         <button
             type="button"
