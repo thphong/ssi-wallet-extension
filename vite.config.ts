@@ -10,7 +10,8 @@ export default defineConfig({
         rollupOptions: {
             input: {
                 popup: 'popup.html',
-                background: 'src/background.ts'
+                background: 'src/background.ts',                
+                content: "src/content.ts"
             },
             output: {
                 entryFileNames: (chunk) => chunk.name === 'background' ? 'background.js' : '[name].js'
