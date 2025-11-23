@@ -9,6 +9,7 @@ chrome.runtime.onInstalled.addListener(() => {
 // Lưu tabId đã yêu cầu login, để lát gửi token về đúng tab
 let pendingLoginTabId: number | null = null;
 let lastPopupTrigger: "login-flow" | "manual-click" | null = null;
+let payload: any;
 
 // Example: Listener for messages from popup or content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -30,6 +31,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
         console.log("[Background] open extension popup (browser action)");
         lastPopupTrigger = "login-flow";
+        payload = message.payload;
         // MV3: chrome.action.openPopup
         chrome.action.openPopup(() => {
             if (chrome.runtime.lastError) {
@@ -75,5 +77,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
         // Reset để tránh reuse state cho lần mở kế tiếp
         lastPopupTrigger = null;
+    }
+    else if (msg === "popup_get_payload") {
+        sendResponse({ payload });
     }
 });

@@ -31,26 +31,13 @@ window.addEventListener("message", (event) => {
 
 // 2. Nhận token từ background → gửi lại cho web
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-    if (msg.type === LOGIN_SUCCESS) {
-        console.log("[CONTENT] Receive token from background:", msg);
-
-        window.postMessage(
-            {
-                source: "ssi-wallet",
-                type: LOGIN_SUCCESS,
-                token: msg.token
-            },
-            "*"
-        );
-    }
-    else {
-        window.postMessage(
-            {
-                source: "ssi-wallet",
-                type: LOGIN_FAILED,
-                error: msg?.error || "UNKNOWN"
-            },
-            "*"
-        );
-    }
+    console.log("[CONTENT] Receive token from background:", msg);
+    window.postMessage(
+        {
+            source: "ssi-wallet",
+            type: msg.type,
+            token: msg.token,
+            error: msg.error
+        },
+        "*");
 });
