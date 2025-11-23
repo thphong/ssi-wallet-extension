@@ -15,6 +15,7 @@
   } from "did-core-sdk";
   import API from "../api/Interceptor";
   import { loadPrivateKey } from "../did-interfaces/encrypt";
+  import { WALLET_REQUEST_TYPE } from "../types/enums";
   let userPublicKey: JsonWebKey | undefined;
   let password: string = "";
   let IsValidPassword = true;
@@ -28,7 +29,6 @@
     }
   });
 
-  const LOGIN_SUCCESS = "SSI_WALLET_LOGIN_SUCCESS";
   let selectedVCs: VC[] = [];
   let maxIndex = 3;
 
@@ -84,7 +84,6 @@
       //Get api url from web
       const res: any = await loadPayload();
       const payload = res.payload;
-      alert(payload);
       // const payload = {
       //   api_nonce: "https://sample-bank-api.onrender.com/auth/nonce",
       //   api_token: "https://sample-bank-api.onrender.com/auth/access-token",
@@ -96,9 +95,11 @@
         didOri: didOri,
         pkReq: userPublicKey?.x,
       });
-      const nonceRes = await API.get(payload.api_nonce, {
-        msg: requestMessage,
-      });
+      const resMsg = (
+        await API.post(payload.api_nonce, {
+          msg: requestMessage,
+        })
+      ).resMsg;
       const userPrivateKey = await loadPrivateKey(didSubject, password);
       if (!userPrivateKey || !userPrivateKey.x || !userPrivateKey.d) {
         throw new Error("Private key is invalid");
@@ -106,7 +107,7 @@
       const decryptedMesage = await decrypt(
         userPrivateKey.x,
         userPrivateKey.d,
-        nonceRes
+        resMsg
       );
       const vp = await createVP(
         [vc],
@@ -114,21 +115,23 @@
         userPrivateKey,
         decryptedMesage.nonce
       );
-      const encryptedVP = await encrypt(issuerPublicKey.x, vp);
-      const accesTokenRes = await API.get(payload.api_token, {
+      const encryptedVP = await encrypt(issuerPublicKey.x, { vp: vp });
+
+      const accesTokenRes = await API.post(payload.api_token, {
         msg: encryptedVP,
       });
 
       chrome.runtime.sendMessage({
-        type: LOGIN_SUCCESS,
+        type: WALLET_REQUEST_TYPE.LOGIN_SUCCESS,
         token: accesTokenRes,
       });
 
       // Đóng popup sau khi login xong (cửa sổ popup)
       window.close();
     } catch (error) {
+      console.error(error);
       chrome.runtime.sendMessage({
-        type: LOGIN_FAILED,
+        type: WALLET_REQUEST_TYPE.LOGIN_FAILED,
         error: error,
       });
     }

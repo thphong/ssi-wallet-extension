@@ -1,7 +1,6 @@
 /// <reference types="chrome" />
 
 chrome.runtime.onInstalled.addListener(() => {
-    console.log('SSI Wallet Extension installed (MV3 background)');
     // Initialize extension storage or perform setup tasks
     chrome.storage.local.set({ onboarded: false });
 });
@@ -18,8 +17,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const LOGIN_SUCCESS = "SSI_WALLET_LOGIN_SUCCESS";
     const LOGIN_FAILED = "SSI_WALLET_LOGIN_FAILED";
 
-    console.log("[Background] listsen message", message);
-
     if (message === 'getVersion') {
         sendResponse({ version: chrome.runtime.getManifest().version });
     }
@@ -27,9 +24,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         if (sender.tab && sender.tab.id !== undefined) {
             pendingLoginTabId = sender.tab.id;
-            console.log("[Background] Save pendingLoginTabId =", pendingLoginTabId);
         }
-        console.log("[Background] open extension popup (browser action)");
         lastPopupTrigger = "login-flow";
         payload = message.payload;
         // MV3: chrome.action.openPopup
@@ -38,31 +33,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 console.error("[Background] openPopup error:", chrome.runtime.lastError);
             }
         });
-
-        sendResponse({ ok: true });
     }
-    else if (message.type === LOGIN_SUCCESS) {
-        console.log("[Background] Doing login...");
-
+    else if (message.type === LOGIN_SUCCESS || message.type === LOGIN_FAILED) {
         if (pendingLoginTabId != null) {
             chrome.tabs.sendMessage(
                 pendingLoginTabId,
                 {
-                    type: LOGIN_SUCCESS,
-                    token: message.token
-                },
-                () => {
-                    if (chrome.runtime.lastError) {
-                        console.error(
-                            "[Background] tabs.sendMessage error:",
-                            chrome.runtime.lastError
-                        );
-                    } else {
-                        console.log(
-                            "[Background] Sent token to tab",
-                            pendingLoginTabId
-                        );
-                    }
+                    type: message.type,
+                    token: message.token,
+                    error: message.error
                 }
             );
         } else {
@@ -74,7 +53,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg === "popup_get_state") {
         sendResponse({ source: lastPopupTrigger });
-
         // Reset để tránh reuse state cho lần mở kế tiếp
         lastPopupTrigger = null;
     }
