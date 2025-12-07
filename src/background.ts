@@ -74,5 +74,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
     else if (msg === "popup_get_payload") {
         sendResponse({ payload });
+        payload = null;
     }
 });

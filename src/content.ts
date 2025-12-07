@@ -7,7 +7,7 @@ const VC_REQUEST = "SSI_WALLET_VC_REQUEST";
 
 window.addEventListener("message", (event) => {
     const data = event.data;
-    if (!data || !data?.payload?.api_nonce || !data?.payload?.api_token) return;
+    if (!data) return;
 
     if (data.type === LOGIN_REQUEST || data.type === VC_REQUEST) {
 

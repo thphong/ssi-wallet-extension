@@ -64,10 +64,6 @@
       //Get api url from web
       const res: any = await loadPayload();
       const payload = res.payload;
-      // const payload = {
-      //   api_nonce: "https://sample-bank-api.onrender.com/auth/nonce",
-      //   api_token: "https://sample-bank-api.onrender.com/auth/access-token",
-      // };
 
       //Encrypt message
       const requestMessage = await encrypt(issuerPublicKey.x, {

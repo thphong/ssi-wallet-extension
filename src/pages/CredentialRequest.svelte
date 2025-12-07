@@ -22,11 +22,12 @@
     let userDid: string;
     let userPublicKey: JsonWebKey | undefined;
     let issuerPublicKey = "";
+    let hasInitValue = false;
 
     let dataInput: any = {
         issuer: "",
-        url_nonce: "",
-        url_request: "",
+        api_vc_nonce: "",
+        api_vc_request: "",
     };
 
     currentUser.subscribe(async (user) => {
@@ -39,8 +40,8 @@
     $: isValidForm =
         dataInput.issuer.trim().length > 0 &&
         IsValidDid &&
-        dataInput.url_nonce.trim().length > 0 &&
-        dataInput.url_request.trim().length > 0;
+        dataInput.api_vc_nonce.trim().length > 0 &&
+        dataInput.api_vc_request.trim().length > 0;
 
     async function onCheckDid() {
         if (!dataInput.issuer) {
@@ -61,9 +62,39 @@
         }
     }
 
+    async function loadPayload() {
+        return new Promise((resolve) => {
+            chrome.runtime.sendMessage("popup_get_payload", (res) => {
+                resolve(res);
+            });
+        });
+    }
+
+    async function init() {
+        //Get api url from web
+        const res: any = await loadPayload();
+        const payload = res?.payload;
+        if (payload) {
+            dataInput.issuer = payload.issuer;
+            dataInput.api_vc_nonce = payload.api_vc_nonce;
+            dataInput.api_vc_request = payload.api_vc_request;
+            hasInitValue = true;
+        }
+    }
+
     async function onRequestCredential() {
         if (!isValidForm) return;
         submitting = true;
+
+        const didDocument = await resolveDid(dataInput.issuer);
+
+        if (!didDocument || !didDocument?.verificationMethod) {
+            console.error("didDocument is null");
+            return;
+        }
+
+        issuerPublicKey =
+            didDocument?.verificationMethod[0]?.publicKeyJwk?.x || "";
 
         const requestMessage = await encrypt(issuerPublicKey, {
             didReq: userDid,
@@ -71,7 +102,7 @@
         });
 
         const resMsg = (
-            await API.post(dataInput.url_nonce, {
+            await API.post(dataInput.api_vc_nonce, {
                 msg: requestMessage,
             })
         ).resMsg;
@@ -106,12 +137,10 @@
             });
 
             const vc = (
-                await API.post(dataInput.url_request, {
+                await API.post(dataInput.api_vc_request, {
                     msg: requestMessage,
                 })
             ).vc;
-
-            console.log("vc", vc);
 
             if (vc) {
                 await addOwnCredential(userDid, vc);
@@ -120,6 +149,8 @@
 
         route = ROUTES.CREDENTIAL;
     }
+
+    init();
 </script>
 
 <PageHeader
@@ -133,23 +164,23 @@
         label={"Issuer"}
         sublabel={"DID of the credential issuer"}
         placeholder={"Enter Issuer"}
-        readonlyCon={submitting}
+        readonlyCon={submitting || hasInitValue}
         on:change={onCheckDid}
         errorMessage={!IsValidDid ? "did is not valid, can't resolve" : ""}
     ></TextInput>
     <TextInput
-        bind:value={dataInput.url_nonce}
+        bind:value={dataInput.api_vc_nonce}
         label={"Nonce URL"}
         sublabel={"Url to get nonce for vc issuance"}
         placeholder={"Enter url"}
-        readonlyCon={submitting}
+        readonlyCon={submitting || hasInitValue}
     ></TextInput>
     <TextInput
-        bind:value={dataInput.url_request}
+        bind:value={dataInput.api_vc_request}
         label={"VC Request URL"}
         sublabel={"Url to get VC"}
         placeholder={"Enter url"}
-        readonlyCon={submitting}
+        readonlyCon={submitting || hasInitValue}
     ></TextInput>
     <div class="form-buttons">
         <button

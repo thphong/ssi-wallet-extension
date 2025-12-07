@@ -25,10 +25,8 @@
 
   let route: string = ROUTES.HOME;
   $: if (popupState == "login-flow") {
-    alert(popupState);
     route = ROUTES.EXTERNAL_LOGIN;
   } else if (popupState == "vc-flow") {
-    alert(popupState);
     route = ROUTES.CREDENTIAL_REQUEST;
   }
 
