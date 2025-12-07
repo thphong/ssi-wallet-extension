@@ -1,6 +1,7 @@
 <script lang="ts">
   import CredentialList from "./CredentialList.svelte";
   import CredentialNew from "./CredentialNew.svelte";
+  import CredentialRequest from "./CredentialRequest.svelte";
   import { ROUTES } from "../types/enums";
   import {
     listOwnCredentials,
@@ -54,6 +55,12 @@
     <button
       class="primary margin-5"
       on:click={() => {
+        route = ROUTES.CREDENTIAL_REQUEST;
+      }}>Request Credential</button
+    >
+    <button
+      class="primary margin-15"
+      on:click={() => {
         route = ROUTES.CREDENTIAL_CREATE;
       }}>Issue Credential</button
     >
@@ -73,6 +80,8 @@
   </section>
 {:else if route == ROUTES.CREDENTIAL_CREATE}
   <CredentialNew bind:route></CredentialNew>
+{:else if route == ROUTES.CREDENTIAL_REQUEST}
+  <CredentialRequest bind:route></CredentialRequest>
 {/if}
 
 <style>
@@ -84,6 +93,10 @@
 
   .margin-5 {
     margin-top: 5px;
+  }
+
+  .margin-15 {
+    margin-top: 15px;
   }
 
   .margin--15 {

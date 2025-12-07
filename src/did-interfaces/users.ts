@@ -56,6 +56,8 @@ export async function createUser(user: UserInput, password: string): Promise<Use
             throw new Error("Not supported did type");
     }
 
+    console.log('Private Key', keyPair.privateKeyJwk);
+
     const userInfo = {
         displayName: user.name,
         avatar: user.name.charAt(0).toUpperCase(),

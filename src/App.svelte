@@ -21,12 +21,17 @@
     triggerRefreshSession,
   } from "./did-interfaces/session";
 
-  export let popupState: "login-flow" | "manual-click" | null;
+  export let popupState: "login-flow" | "vc-flow" | "manual-click" | null;
 
   let route: string = ROUTES.HOME;
   $: if (popupState == "login-flow") {
+    alert(popupState);
     route = ROUTES.EXTERNAL_LOGIN;
+  } else if (popupState == "vc-flow") {
+    alert(popupState);
+    route = ROUTES.CREDENTIAL_REQUEST;
   }
+
   let showMenu = false;
   let isValidSession: boolean = false;
   $: if ($currentUser && $triggerRefreshSession) {
@@ -141,7 +146,7 @@
       <div class="body-content">
         {#if route === ROUTES.HOME}
           <Home></Home>
-        {:else if route === ROUTES.CREDENTIAL || route === ROUTES.CREDENTIAL_CREATE}
+        {:else if route === ROUTES.CREDENTIAL || route === ROUTES.CREDENTIAL_CREATE || route === ROUTES.CREDENTIAL_REQUEST}
           <Credential bind:route></Credential>
         {:else if route === ROUTES.PRESENTATION || route === ROUTES.PRESENTATION_CREATE}
           <Presentation bind:route></Presentation>
@@ -170,7 +175,8 @@
             class="tab"
             title="Credential"
             class:active={route == ROUTES.CREDENTIAL ||
-              route == ROUTES.CREDENTIAL_CREATE}
+              route == ROUTES.CREDENTIAL_CREATE ||
+              route == ROUTES.CREDENTIAL_REQUEST}
             on:click={() => {
               openTab(ROUTES.CREDENTIAL);
             }}
