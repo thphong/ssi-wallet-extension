@@ -3,7 +3,14 @@
     import TextInput from "../components/TextInput.svelte";
     import { ROUTES } from "../types/enums";
     import API from "../api/Interceptor";
-    import { encrypt, decrypt, sign, jsonToArrayBuffer } from "did-core-sdk";
+    import {
+        encrypt,
+        decrypt,
+        sign,
+        jsonToArrayBuffer,
+        resolveDid,
+        arrBuftobase64u,
+    } from "did-core-sdk";
     import { currentUser, getPublicKey } from "../did-interfaces/users";
     import { loadPrivateKey } from "../did-interfaces/encrypt";
     import { addOwnCredential } from "../did-interfaces/credential";
@@ -11,11 +18,13 @@
 
     export let route: string;
     let submitting = false;
+    let IsValidDid = true;
     let userDid: string;
     let userPublicKey: JsonWebKey | undefined;
-    const issuerPublicKey = "TO-Do";
+    let issuerPublicKey = "";
 
     let dataInput: any = {
+        issuer: "",
         url_nonce: "",
         url_request: "",
     };
@@ -28,8 +37,29 @@
     });
 
     $: isValidForm =
+        dataInput.issuer.trim().length > 0 &&
+        IsValidDid &&
         dataInput.url_nonce.trim().length > 0 &&
         dataInput.url_request.trim().length > 0;
+
+    async function onCheckDid() {
+        if (!dataInput.issuer) {
+            IsValidDid = false;
+            return;
+        }
+        try {
+            const res = await resolveDid(dataInput.issuer);
+            if (res && res?.verificationMethod) {
+                issuerPublicKey =
+                    res?.verificationMethod[0]?.publicKeyJwk?.x || "";
+                IsValidDid = true;
+            } else {
+                IsValidDid = false;
+            }
+        } catch {
+            IsValidDid = false;
+        }
+    }
 
     async function onRequestCredential() {
         if (!isValidForm) return;
@@ -46,7 +76,10 @@
             })
         ).resMsg;
 
-        const userPrivateKey = await loadPrivateKey(userDid, getPassword(userDid));
+        const userPrivateKey = await loadPrivateKey(
+            userDid,
+            getPassword(userDid),
+        );
         if (!userPrivateKey || !userPrivateKey.x || !userPrivateKey.d) {
             throw new Error("Private key is invalid");
         }
@@ -69,7 +102,7 @@
             const requestMessage = await encrypt(issuerPublicKey, {
                 didReq: userDid,
                 nonce: decryptedMesage.nonce,
-                signReq: signReq,
+                signReq: arrBuftobase64u(signReq),
             });
 
             const vc = (
@@ -78,7 +111,11 @@
                 })
             ).vc;
 
-            await addOwnCredential(userDid, vc);
+            console.log("vc", vc);
+
+            if (vc) {
+                await addOwnCredential(userDid, vc);
+            }
         }
 
         route = ROUTES.CREDENTIAL;
@@ -91,6 +128,15 @@
     pageTitle="Request Credential"
 ></PageHeader>
 <div>
+    <TextInput
+        bind:value={dataInput.issuer}
+        label={"Issuer"}
+        sublabel={"DID of the credential issuer"}
+        placeholder={"Enter Issuer"}
+        readonlyCon={submitting}
+        on:change={onCheckDid}
+        errorMessage={!IsValidDid ? "did is not valid, can't resolve" : ""}
+    ></TextInput>
     <TextInput
         bind:value={dataInput.url_nonce}
         label={"Nonce URL"}
