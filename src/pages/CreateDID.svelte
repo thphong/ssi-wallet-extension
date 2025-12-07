@@ -27,7 +27,7 @@
             (dataInput.didType == "web" &&
                 dataInput.didWeb.trim().length > 0 &&
                 isWebDidValid &&
-                !isCheckingDid));
+                !isCheckingDid)); 
 
     $: isValidForm =
         isValidUserInfo && password == rePassword && !!password && !!rePassword;
