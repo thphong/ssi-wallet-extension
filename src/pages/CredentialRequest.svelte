@@ -7,13 +7,13 @@
     import { currentUser, getPublicKey } from "../did-interfaces/users";
     import { loadPrivateKey } from "../did-interfaces/encrypt";
     import { addOwnCredential } from "../did-interfaces/credential";
+    import { getPassword } from "../did-interfaces/session";
 
     export let route: string;
     let submitting = false;
     let userDid: string;
     let userPublicKey: JsonWebKey | undefined;
     const issuerPublicKey = "TO-Do";
-    const password = "TO-DO";
 
     let dataInput: any = {
         url_nonce: "",
@@ -46,7 +46,7 @@
             })
         ).resMsg;
 
-        const userPrivateKey = await loadPrivateKey(userDid, password);
+        const userPrivateKey = await loadPrivateKey(userDid, getPassword(userDid));
         if (!userPrivateKey || !userPrivateKey.x || !userPrivateKey.d) {
             throw new Error("Private key is invalid");
         }

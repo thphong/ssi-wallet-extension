@@ -1,5 +1,4 @@
 <script lang="ts">
-  import TextInput from "../components/TextInput.svelte";
   import CredentialList from "./CredentialList.svelte";
   import { currentUser, getPublicKey } from "../did-interfaces/users";
   import {
@@ -16,9 +15,8 @@
   import API from "../api/Interceptor";
   import { loadPrivateKey } from "../did-interfaces/encrypt";
   import { WALLET_REQUEST_TYPE } from "../types/enums";
+  import { getPassword } from "../did-interfaces/session";
   let userPublicKey: JsonWebKey | undefined;
-  let password: string = "";
-  let IsValidPassword = true;
   let userDid: string;
 
   currentUser.subscribe(async (user) => {
@@ -34,25 +32,7 @@
 
   let submitting = false;
 
-  $: isValidForm =
-    selectedVCs?.length > 0 && password.trim().length > 0 && IsValidPassword;
-
-  async function onCheckPassword() {
-    if (!password) {
-      IsValidPassword = false;
-      return;
-    }
-    try {
-      const pk = await loadPrivateKey(userDid, password);
-      if (pk) {
-        IsValidPassword = true;
-      } else {
-        IsValidPassword = false;
-      }
-    } catch {
-      IsValidPassword = false;
-    }
-  }
+  $: isValidForm = selectedVCs?.length > 0;
 
   async function loadPayload() {
     return new Promise((resolve) => {
@@ -100,20 +80,20 @@
           msg: requestMessage,
         })
       ).resMsg;
-      const userPrivateKey = await loadPrivateKey(didSubject, password);
+      const userPrivateKey = await loadPrivateKey(didSubject, getPassword(didSubject));
       if (!userPrivateKey || !userPrivateKey.x || !userPrivateKey.d) {
         throw new Error("Private key is invalid");
       }
       const decryptedMesage = await decrypt(
         userPrivateKey.x,
         userPrivateKey.d,
-        resMsg
+        resMsg,
       );
       const vp = await createVP(
         [vc],
         didSubject,
         userPrivateKey,
-        decryptedMesage.nonce
+        decryptedMesage.nonce,
       );
       const encryptedVP = await encrypt(issuerPublicKey.x, { vp: vp });
 
@@ -139,16 +119,6 @@
 </script>
 
 <section class="main-content">
-  <TextInput
-    bind:value={password}
-    label={"Pasword"}
-    sublabel={"Pasword to load your private key to sign presentation"}
-    placeholder={"Your password"}
-    readonlyCon={submitting}
-    type="password"
-    on:change={onCheckPassword}
-    errorMessage={!IsValidPassword ? "password is not valid" : ""}
-  ></TextInput>
   <div class="list-header margin--15">Select credentials to login</div>
   <CredentialList
     credentials={$listOwnCredentials}

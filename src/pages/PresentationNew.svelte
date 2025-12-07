@@ -8,11 +8,12 @@
     import { loadPrivateKey } from "../did-interfaces/encrypt";
     import { addPresentation } from "../did-interfaces/presentation";
     import { getOwnCredentials } from "../did-interfaces/credential";
+    import { getPassword } from "../did-interfaces/session";
+    import { downloadJSON } from "../libs/utils";
 
     export let route: string;
     export let selectedVCs: any[] = [];
 
-    let password = "";
     let nonce = "";
     let holderDid = "";
 
@@ -23,38 +24,18 @@
     });
 
     let submitting = false;
-    let IsValidPassword = true;
 
-    $: isValidForm =
-        nonce.trim().length > 0 &&
-        password.trim().length > 0 &&
-        IsValidPassword;
+    $: isValidForm = nonce.trim().length > 0;
 
-    async function onCheckPassword() {
-        if (!password) {
-            IsValidPassword = false;
-            return;
-        }
-        try {
-            const pk = await loadPrivateKey(holderDid, password);
-            if (pk) {
-                IsValidPassword = true;
-            } else {
-                IsValidPassword = false;
-            }
-        } catch {
-            IsValidPassword = false;
-        }
-    }
-
-    async function onCreateCredential() {
+    async function onCreatePresentation() {
         if (!isValidForm) return;
         submitting = true;
-        const pk = await loadPrivateKey(holderDid, password);
+        const pk = await loadPrivateKey(holderDid, getPassword(holderDid));
         const vcs = selectedVCs.map(({ selected, ...rest }) => rest);
         const vp = await createVP(vcs, holderDid, pk, nonce);
         await addPresentation(holderDid, vp);
         selectedVCs = [];
+        downloadJSON(vp, "presentation.json");
         await getOwnCredentials(holderDid);
         route = ROUTES.PRESENTATION;
     }
@@ -74,22 +55,11 @@
         readonlyCon={submitting}
     ></TextInput>
 
-    <TextInput
-        bind:value={password}
-        label={"Pasword"}
-        sublabel={"Pasword to load your private key to sign credential"}
-        placeholder={"Your password"}
-        readonlyCon={submitting}
-        type="password"
-        on:change={onCheckPassword}
-        errorMessage={!IsValidPassword ? "password is not valid" : ""}
-    ></TextInput>
-
     <div class="form-buttons">
         <button
             class="primary"
             disabled={!isValidForm || submitting}
-            on:click={onCreateCredential}
+            on:click={onCreatePresentation}
         >
             {submitting ? "Creating…" : "Finish"}
         </button>

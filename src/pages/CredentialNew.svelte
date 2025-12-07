@@ -8,6 +8,7 @@
   import { createVC, resolveDid, createDelegatedVC } from "did-core-sdk";
   import { currentUser } from "../did-interfaces/users";
   import { loadPrivateKey } from "../did-interfaces/encrypt";
+  import { getPassword } from "../did-interfaces/session";
   import {
     addDeliveryCredential,
     listOwnCredentials,
@@ -26,7 +27,6 @@
       text: undefined,
     },
   };
-  let password = "";
 
   currentUser.subscribe((user) => {
     if (user) {
@@ -36,12 +36,10 @@
 
   let submitting = false;
   let IsValidDid = true;
-  let IsValidPassword = true;
 
   $: isValidForm =
     dataInput.subject.trim().length > 0 &&
     IsValidDid &&
-    IsValidPassword &&
     dataInput.jsonValue.json &&
     JSON.stringify(dataInput.jsonValue.json) != "{}";
 
@@ -62,28 +60,11 @@
     }
   }
 
-  async function onCheckPassword() {
-    if (!password) {
-      IsValidPassword = false;
-      return;
-    }
-    try {
-      const pk = await loadPrivateKey(dataInput.issuer, password);
-      if (pk) {
-        IsValidPassword = true;
-      } else {
-        IsValidPassword = false;
-      }
-    } catch {
-      IsValidPassword = false;
-    }
-  }
-
   async function onCreateCredential() {
     if (!isValidForm) return;
     dataInput.credentialSubject = dataInput.jsonValue.json;
     submitting = true;
-    const pk = await loadPrivateKey(dataInput.issuer, password);
+    const pk = await loadPrivateKey(dataInput.issuer, getPassword(dataInput.issuer));
 
     if (delegateVC.length > 0) {
       const { selected, ...parentVC } = delegateVC[0];
@@ -92,7 +73,7 @@
         dataInput.subject,
         dataInput.credentialSubject,
         pk,
-        dataInput.expirationDate
+        dataInput.expirationDate,
       );
       await addDeliveryCredential(dataInput.issuer, delegatedVC);
     } else {
@@ -133,17 +114,6 @@
     placeholder={"Select Expired Date"}
     readonlyCon={submitting}
   ></DatePicker>
-
-  <TextInput
-    bind:value={password}
-    label={"Pasword"}
-    sublabel={"Pasword to load your private key to sign credential"}
-    placeholder={"Your password"}
-    readonlyCon={submitting}
-    type="password"
-    on:change={onCheckPassword}
-    errorMessage={!IsValidPassword ? "password is not valid" : ""}
-  ></TextInput>
 
   <JsonEditor
     bind:value={dataInput.jsonValue}
