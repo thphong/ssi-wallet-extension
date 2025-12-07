@@ -31,6 +31,7 @@
   let maxIndex = 3;
 
   let submitting = false;
+  let errorMessage = "";
 
   $: isValidForm = selectedVCs?.length > 0;
 
@@ -71,12 +72,23 @@
         didOri: didOri,
         pkReq: userPublicKey?.x,
       });
-      const resMsg = (
-        await API.post(payload.api_nonce, {
-          msg: requestMessage,
-        })
-      ).resMsg;
-      const userPrivateKey = await loadPrivateKey(didSubject, getPassword(didSubject));
+
+      const nonceRes = await API.post(payload.api_nonce, {
+        msg: requestMessage,
+      });
+
+      if (nonceRes.error) {
+        errorMessage = nonceRes.error;
+        submitting = false;        
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
+      const resMsg = nonceRes.resMsg;
+      const userPrivateKey = await loadPrivateKey(
+        didSubject,
+        getPassword(didSubject),
+      );
       if (!userPrivateKey || !userPrivateKey.x || !userPrivateKey.d) {
         throw new Error("Private key is invalid");
       }
@@ -97,6 +109,13 @@
         msg: encryptedVP,
       });
 
+      if (accesTokenRes.error) {
+        errorMessage = accesTokenRes.error;
+        submitting = false;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
       chrome.runtime.sendMessage({
         type: WALLET_REQUEST_TYPE.LOGIN_SUCCESS,
         token: accesTokenRes,
@@ -106,6 +125,7 @@
       window.close();
     } catch (error) {
       console.error(error);
+      submitting = false;
       chrome.runtime.sendMessage({
         type: WALLET_REQUEST_TYPE.LOGIN_FAILED,
         error: error,
@@ -115,6 +135,11 @@
 </script>
 
 <section class="main-content">
+  {#if errorMessage}
+    <div class="error-message">
+      {errorMessage}
+    </div>
+  {/if}
   <div class="list-header margin--15">Select credentials to login</div>
   <CredentialList
     credentials={$listOwnCredentials}
@@ -141,5 +166,9 @@
 
   .margin--15 {
     margin-top: -15px;
+  }
+
+  .error-message {
+    padding-bottom: 10px;
   }
 </style>

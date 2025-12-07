@@ -30,6 +30,8 @@
         api_vc_request: "",
     };
 
+    let errorMessage = "";
+
     currentUser.subscribe(async (user) => {
         if (user) {
             userDid = user.did;
@@ -90,6 +92,8 @@
 
         if (!didDocument || !didDocument?.verificationMethod) {
             console.error("didDocument is null");
+            submitting = false;
+            window.scrollTo({ top: 0, behavior: "smooth" });
             return;
         }
 
@@ -101,11 +105,18 @@
             pkReq: userPublicKey?.x,
         });
 
-        const resMsg = (
-            await API.post(dataInput.api_vc_nonce, {
-                msg: requestMessage,
-            })
-        ).resMsg;
+        const nonceRes = await API.post(dataInput.api_vc_nonce, {
+            msg: requestMessage,
+        });
+
+        if (nonceRes.error) {
+            errorMessage = nonceRes.error;
+            submitting = false;
+            window.scrollTo({ top: 0, behavior: "smooth" });
+            return;
+        }
+
+        const resMsg = nonceRes.resMsg;
 
         const userPrivateKey = await loadPrivateKey(
             userDid,
@@ -136,11 +147,18 @@
                 signReq: arrBuftobase64u(signReq),
             });
 
-            const vc = (
-                await API.post(dataInput.api_vc_request, {
-                    msg: requestMessage,
-                })
-            ).vc;
+            const vcRes = await API.post(dataInput.api_vc_request, {
+                msg: requestMessage,
+            });
+
+            if (vcRes.error) {
+                errorMessage = vcRes.error;
+                submitting = false;
+                window.scrollTo({ top: 0, behavior: "smooth" });
+                return;
+            }
+
+            const vc = vcRes.vc;
 
             if (vc) {
                 await addOwnCredential(userDid, vc);
@@ -159,6 +177,11 @@
     pageTitle="Request Credential"
 ></PageHeader>
 <div>
+    {#if errorMessage}
+        <div class="error-message">
+            {errorMessage}
+        </div>
+    {/if}
     <TextInput
         bind:value={dataInput.issuer}
         label={"Issuer"}
