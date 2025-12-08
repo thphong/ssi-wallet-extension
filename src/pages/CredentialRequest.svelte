@@ -26,8 +26,8 @@
 
     let dataInput: any = {
         issuer: "",
-        api_vc_nonce: "",
-        api_vc_request: "",
+        nonce_endpoint: "",
+        credential_endpoint: "",
     };
 
     let errorMessage = "";
@@ -42,8 +42,8 @@
     $: isValidForm =
         dataInput.issuer.trim().length > 0 &&
         IsValidDid &&
-        dataInput.api_vc_nonce.trim().length > 0 &&
-        dataInput.api_vc_request.trim().length > 0;
+        dataInput.nonce_endpoint.trim().length > 0 &&
+        dataInput.credential_endpoint.trim().length > 0;
 
     async function onCheckDid() {
         if (!dataInput.issuer) {
@@ -56,6 +56,21 @@
                 issuerPublicKey =
                     res?.verificationMethod[0]?.publicKeyJwk?.x || "";
                 IsValidDid = true;
+
+                const serviceVC: any = res.service?.find(
+                    (item) => item.type.indexOf("OpenID4VCI") >= 0,
+                )?.serviceEndpoint;
+
+                dataInput.nonce_endpoint =
+                    serviceVC?.nonce_endpoint &&
+                    serviceVC?.nonce_endpoint.length > 0
+                        ? serviceVC?.nonce_endpoint[0]
+                        : "";
+                dataInput.credential_endpoint =
+                    serviceVC?.credential_endpoint &&
+                    serviceVC?.credential_endpoint.length > 0
+                        ? serviceVC?.credential_endpoint[0]
+                        : "";
             } else {
                 IsValidDid = false;
             }
@@ -78,9 +93,8 @@
         const payload = res?.payload;
         if (payload) {
             dataInput.issuer = payload.issuer;
-            dataInput.api_vc_nonce = payload.api_vc_nonce;
-            dataInput.api_vc_request = payload.api_vc_request;
             hasInitValue = true;
+            await onCheckDid();
         }
     }
 
@@ -105,7 +119,7 @@
             pkReq: userPublicKey?.x,
         });
 
-        const nonceRes = await API.post(dataInput.api_vc_nonce, {
+        const nonceRes = await API.post(dataInput.nonce_endpoint, {
             msg: requestMessage,
         });
 
@@ -147,7 +161,7 @@
                 signReq: arrBuftobase64u(signReq),
             });
 
-            const vcRes = await API.post(dataInput.api_vc_request, {
+            const vcRes = await API.post(dataInput.credential_endpoint, {
                 msg: requestMessage,
             });
 
@@ -192,18 +206,22 @@
         errorMessage={!IsValidDid ? "did is not valid, can't resolve" : ""}
     ></TextInput>
     <TextInput
-        bind:value={dataInput.api_vc_nonce}
+        value={dataInput.nonce_endpoint}
         label={"Nonce URL"}
         sublabel={"Url to get nonce for vc issuance"}
-        placeholder={"Enter url"}
-        readonlyCon={submitting || hasInitValue}
+        type={"info"}
+        errorMessage={dataInput.nonce_endpoint == "" && dataInput.issuer
+            ? "can't find nonce endpoint in DID document"
+            : ""}
     ></TextInput>
     <TextInput
-        bind:value={dataInput.api_vc_request}
+        bind:value={dataInput.credential_endpoint}
         label={"VC Request URL"}
         sublabel={"Url to get VC"}
-        placeholder={"Enter url"}
-        readonlyCon={submitting || hasInitValue}
+        type={"info"}
+        errorMessage={dataInput.credential_endpoint == "" && dataInput.issuer
+            ? "can't find request vc endpoint in DID document"
+            : ""}
     ></TextInput>
     <div class="form-buttons">
         <button

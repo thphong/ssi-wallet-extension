@@ -4,6 +4,7 @@ export type UserInput = {
     name: string;
     didType: DidType;
     didWeb: string;
+    jsonValue: any;
 }
 
 export type UserInfo = {

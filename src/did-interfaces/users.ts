@@ -35,7 +35,7 @@ async function addUser(user: UserInfo) {
     await dbInstance.saveValue(KEY_LIST_USER, users);
 }
 
-export async function createUser(user: UserInput, password: string): Promise<UserInfo> {
+export async function createUser(user: UserInput, password: string, service?: any[]): Promise<UserInfo> {
     const keyPair = await createKeyPair();
 
     let did: string, doc: DidDocument;
@@ -50,7 +50,7 @@ export async function createUser(user: UserInput, password: string): Promise<Use
             ));
             break;
         case "blockchain":
-            ({ did, doc } = await didIOTA.create(keyPair.publicKeyJwk, { privateKey: keyPair.privateKeyJwk }));
+            ({ did, doc } = await didIOTA.create(keyPair.publicKeyJwk, { privateKey: keyPair.privateKeyJwk, service: service }));
             break;
         default:
             throw new Error("Not supported did type");

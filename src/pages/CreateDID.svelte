@@ -5,8 +5,9 @@
     import { type UserInput } from "../types/types";
     import { ROUTES } from "../types/enums";
     import { createUser } from "../did-interfaces/users";
-    import { didWeb } from "did-core-sdk";
+    import { didWeb, validateIServiceList } from "did-core-sdk";
     import {} from "../did-interfaces/iota";
+    import JsonEditor from "../components/JsonEditor.svelte";
 
     export let route: string;
 
@@ -14,12 +15,18 @@
         name: "",
         didType: "blockchain",
         didWeb: "",
+        jsonValue: {
+            json: [{}],
+            text: undefined,
+        },
     };
     let password = "";
     let rePassword = "";
     let submitting = false;
     let isWebDidValid = true;
     let isCheckingDid = false;
+    let isServiceValid = true;
+    let errorMessageService = "";
 
     $: isValidUserInfo =
         dataInput.name.trim().length > 0 &&
@@ -27,7 +34,8 @@
             (dataInput.didType == "web" &&
                 dataInput.didWeb.trim().length > 0 &&
                 isWebDidValid &&
-                !isCheckingDid)); 
+                !isCheckingDid)) &&
+        !!isServiceValid;
 
     $: isValidForm =
         isValidUserInfo && password == rePassword && !!password && !!rePassword;
@@ -40,7 +48,7 @@
     async function onCreateUser() {
         if (!isValidForm) return;
         submitting = true;
-        await createUser(dataInput, password);
+        await createUser(dataInput, password, !isServiceNull() ? dataInput.jsonValue.json : []);
         route = ROUTES.HOME;
     }
 
@@ -56,6 +64,30 @@
             isWebDidValid = false;
         } finally {
             isCheckingDid = false;
+        }
+    }
+
+    function isServiceNull() {
+        return (
+            JSON.stringify(dataInput.jsonValue.json) == "[{}]" ||
+            dataInput.jsonValue.json == null ||
+            dataInput.jsonValue.json == undefined ||
+            dataInput.jsonValue.json == ""
+        );
+    }
+
+    async function onCheckService() {
+        isServiceValid = true;
+        errorMessageService = "";
+        try {
+            if (isServiceNull()) {
+                isServiceValid = true;
+            } else {
+                isServiceValid = validateIServiceList(dataInput.jsonValue.json);
+            }
+        } catch (error: any) {
+            isServiceValid = false;
+            errorMessageService = error.message;
         }
     }
 </script>
@@ -79,7 +111,6 @@
             sublabel={"Choose how the DID is anchored"}
             readonlyCon={submitting}
             options={[
-                { value: "key", name: "Key (did:key)" },
                 { value: "web", name: "Web (did:web)" },
                 { value: "blockchain", name: "Blockchain (did:iota)" },
             ]}
@@ -99,7 +130,16 @@
                     : ""}
             ></TextInput>
         {/if}
-
+        {#if dataInput.didType == "blockchain"}
+            <JsonEditor
+                bind:value={dataInput.jsonValue}
+                label={"Service Endpoint (optional)"}
+                sublabel={"Service Endpoint in JSON format"}
+                readonlyCon={submitting}
+                errorMessage={errorMessageService}
+                on:change={onCheckService}
+            ></JsonEditor>
+        {/if}
         <div class="form-buttons">
             <button
                 class="primary"

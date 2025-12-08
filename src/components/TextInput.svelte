@@ -43,6 +43,8 @@
             {maxlength}
             class:readonly={readonlyCon}
         />
+    {:else if type == "info"}
+        <div>{value}</div>
     {:else}
         <input
             class="input"

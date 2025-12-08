@@ -11,6 +11,7 @@
     encrypt,
     decrypt,
     createVP,
+    resolveDid,
   } from "did-core-sdk";
   import API from "../api/Interceptor";
   import { loadPrivateKey } from "../did-interfaces/encrypt";
@@ -46,6 +47,38 @@
   async function handleLogin() {
     try {
       submitting = true;
+
+      //Get api url from web
+      const res: any = await loadPayload();
+      const issuer = res.payload.issuer;
+
+      const didDocument = await resolveDid(issuer);
+      let nonce_endpoint = "";
+      let authorization_endpoint = "";
+      if (didDocument) {
+        const serviceVC: any = didDocument.service?.find(
+          (item) => item.type.indexOf("OpenID4VP") >= 0,
+        )?.serviceEndpoint;
+
+        nonce_endpoint =
+          serviceVC?.nonce_endpoint && serviceVC?.nonce_endpoint.length > 0
+            ? serviceVC?.nonce_endpoint[0]
+            : "";
+        authorization_endpoint =
+          serviceVC?.authorization_endpoint &&
+          serviceVC?.authorization_endpoint.length > 0
+            ? serviceVC?.authorization_endpoint[0]
+            : "";
+      }
+
+      if (!nonce_endpoint || !authorization_endpoint) {
+        errorMessage =
+          "Can't find end point to get access token in issuer's DID document";
+        submitting = false;
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+
       const vc = selectedVCs[0];
       const {
         didSubject,
@@ -62,9 +95,6 @@
       if (userDid != didSubject) {
         throw new Error("Verify Credential: This is not your Credential");
       }
-      //Get api url from web
-      const res: any = await loadPayload();
-      const payload = res.payload;
 
       //Encrypt message
       const requestMessage = await encrypt(issuerPublicKey.x, {
@@ -73,14 +103,14 @@
         pkReq: userPublicKey?.x,
       });
 
-      const nonceRes = await API.post(payload.api_nonce, {
+      const nonceRes = await API.post(nonce_endpoint, {
         msg: requestMessage,
       });
 
       if (nonceRes.error) {
         errorMessage = nonceRes.error;
-        submitting = false;        
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        submitting = false;
+        window.scrollTo({ top: 0, behavior: "smooth" });
         return;
       }
 
@@ -105,14 +135,14 @@
       );
       const encryptedVP = await encrypt(issuerPublicKey.x, { vp: vp });
 
-      const accesTokenRes = await API.post(payload.api_token, {
+      const accesTokenRes = await API.post(authorization_endpoint, {
         msg: encryptedVP,
       });
 
       if (accesTokenRes.error) {
         errorMessage = accesTokenRes.error;
         submitting = false;
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        window.scrollTo({ top: 0, behavior: "smooth" });
         return;
       }
 

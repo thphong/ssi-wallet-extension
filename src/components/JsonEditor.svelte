@@ -1,11 +1,14 @@
 <script lang="ts">
     import { JSONEditor } from "svelte-jsoneditor";
+    import { createEventDispatcher } from "svelte";
 
     export let label = "";
     export let sublabel = "";
     export let value: any = {};
     export let readonlyCon = false;
     export let errorMessage = "";
+
+    const dispatch = createEventDispatcher();
 </script>
 
 <div class="field">
@@ -16,7 +19,13 @@
         <div class="sublabel">{sublabel}</div>
     {/if}
     <div>
-        <JSONEditor bind:content={value} readOnly={readonlyCon} />
+        <JSONEditor
+            bind:content={value}
+            readOnly={readonlyCon}
+            onChange={(update) => {
+                dispatch("change", update);
+            }}
+        />
     </div>
     {#if errorMessage}
         <div class="error-message">
