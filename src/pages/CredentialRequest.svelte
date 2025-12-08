@@ -104,7 +104,7 @@
 
         const didDocument = await resolveDid(dataInput.issuer);
 
-        if (!didDocument || !didDocument?.verificationMethod) {
+        if (!didDocument || !didDocument?.keyAgreement) {
             console.error("didDocument is null");
             submitting = false;
             window.scrollTo({ top: 0, behavior: "smooth" });
@@ -112,7 +112,7 @@
         }
 
         issuerPublicKey =
-            didDocument?.verificationMethod[0]?.publicKeyJwk?.x || "";
+            (didDocument?.keyAgreement[0] as any)?.publicKeyJwk?.x || "";
 
         const requestMessage = await encrypt(issuerPublicKey, {
             didReq: userDid,
