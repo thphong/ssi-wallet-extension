@@ -4,6 +4,7 @@
     import TextInput from "../components/TextInput.svelte";
     import JsonViewer from "../components/JsonViewer.svelte";
     import { verifyVP } from "did-core-sdk";
+    import { loader } from "../components/loader/loader";
 
     const emptyObject = {};
     let fileContent: any = emptyObject;
@@ -18,6 +19,7 @@
     async function onVerify() {
         if (!isValidForm) return;
         submitting = true;
+        loader.showLoader();
         try {
             verifiedResult = await verifyVP(fileContent, nonce);
             errorMessage = "";
@@ -25,6 +27,7 @@
             errorMessage = error.message;
         } finally {
             submitting = false;
+            loader.hideLoader();
         }
     }
 </script>

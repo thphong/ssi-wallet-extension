@@ -15,6 +15,7 @@
     getCurrentIdexCredentials,
     setCurrentIdexCredentials,
   } from "../did-interfaces/credential";
+  import { loader } from "../components/loader/loader";
 
   export let route: string;
   let delegateVC: any[];
@@ -64,33 +65,39 @@
 
   async function onCreateCredential() {
     if (!isValidForm) return;
-    dataInput.credentialSubject = dataInput.jsonValue.json;
-    submitting = true;
-    const pk = await loadPrivateKey(
-      dataInput.issuer,
-      getPassword(dataInput.issuer),
-    );
-    const currentIndex = await getCurrentIdexCredentials(dataInput.issuer);
-
-    if (delegateVC.length > 0) {
-      const { selected, ...parentVC } = delegateVC[0];
-      const delegatedVC = await createDelegatedVC(
-        parentVC,
-        dataInput.subject,
-        dataInput.credentialSubject,
-        pk,
-        dataInput.expirationDate,
-        currentIndex,
+    loader.showLoader();
+    try {
+      dataInput.credentialSubject = dataInput.jsonValue.json;
+      submitting = true;
+      const pk = await loadPrivateKey(
+        dataInput.issuer,
+        getPassword(dataInput.issuer),
       );
-      await addDeliveryCredential(dataInput.issuer, delegatedVC);
-    } else {
-      dataInput.revocationBitmapIndex = currentIndex;
-      const vc = await createVC(dataInput, pk);
-      await addDeliveryCredential(dataInput.issuer, vc);
-    }
-    await setCurrentIdexCredentials(dataInput.issuer);
+      const currentIndex = await getCurrentIdexCredentials(dataInput.issuer);
 
-    route = ROUTES.CREDENTIAL;
+      if (delegateVC.length > 0) {
+        const { selected, ...parentVC } = delegateVC[0];
+        const delegatedVC = await createDelegatedVC(
+          parentVC,
+          dataInput.subject,
+          dataInput.credentialSubject,
+          pk,
+          dataInput.expirationDate,
+          currentIndex,
+        );
+        await addDeliveryCredential(dataInput.issuer, delegatedVC);
+      } else {
+        dataInput.revocationBitmapIndex = currentIndex;
+        const vc = await createVC(dataInput, pk);
+        await addDeliveryCredential(dataInput.issuer, vc);
+      }
+      await setCurrentIdexCredentials(dataInput.issuer);
+
+      route = ROUTES.CREDENTIAL;
+    } finally {
+      submitting = false;
+      loader.hideLoader();
+    }
   }
 
   async function onSelectDelegateVC() {

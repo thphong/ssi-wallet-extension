@@ -17,6 +17,8 @@
   import { loadPrivateKey } from "../did-interfaces/encrypt";
   import { WALLET_REQUEST_TYPE } from "../types/enums";
   import { getPassword } from "../did-interfaces/session";
+  import { loader } from "../components/loader/loader";
+
   let userPublicKey: JsonWebKey | undefined;
   let userDid: string;
 
@@ -45,6 +47,7 @@
   }
 
   async function handleLogin() {
+    loader.showLoader();
     try {
       submitting = true;
 
@@ -75,6 +78,7 @@
         errorMessage =
           "Can't find end point to get access token in issuer's DID document";
         submitting = false;
+        loader.hideLoader();
         window.scrollTo({ top: 0, behavior: "smooth" });
         return;
       }
@@ -110,6 +114,7 @@
       if (nonceRes.error) {
         errorMessage = nonceRes.error;
         submitting = false;
+        loader.hideLoader();
         window.scrollTo({ top: 0, behavior: "smooth" });
         return;
       }
@@ -142,6 +147,7 @@
       if (accesTokenRes.error) {
         errorMessage = accesTokenRes.error;
         submitting = false;
+        loader.hideLoader();
         window.scrollTo({ top: 0, behavior: "smooth" });
         return;
       }
@@ -156,6 +162,7 @@
     } catch (error) {
       console.error(error);
       submitting = false;
+      loader.hideLoader();
       chrome.runtime.sendMessage({
         type: WALLET_REQUEST_TYPE.LOGIN_FAILED,
         error: error,

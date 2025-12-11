@@ -28,7 +28,7 @@
     z-index: 999;
     -webkit-transition: 0.9s;
     transition: 0.9s;
-    opacity: 0.3;
+    opacity: 0.1;
   }
 
   .loader {

@@ -8,6 +8,7 @@
     import { didWeb, validateIServiceList } from "did-core-sdk";
     import {} from "../did-interfaces/iota";
     import JsonEditor from "../components/JsonEditor.svelte";
+    import { loader } from "../components/loader/loader";
 
     export let route: string;
 
@@ -47,9 +48,19 @@
 
     async function onCreateUser() {
         if (!isValidForm) return;
-        submitting = true;
-        await createUser(dataInput, password, !isServiceNull() ? dataInput.jsonValue.json : []);
-        route = ROUTES.HOME;
+        loader.showLoader();
+        try {
+            submitting = true;
+            await createUser(
+                dataInput,
+                password,
+                !isServiceNull() ? dataInput.jsonValue.json : [],
+            );
+            route = ROUTES.HOME;
+        } finally {
+            submitting = false;
+            loader.hideLoader();
+        }
     }
 
     async function onCheckWebDid() {

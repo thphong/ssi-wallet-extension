@@ -15,6 +15,7 @@
     import { loadPrivateKey } from "../did-interfaces/encrypt";
     import { addOwnCredential } from "../did-interfaces/credential";
     import { getPassword } from "../did-interfaces/session";
+    import { loader } from "../components/loader/loader";
 
     export let route: string;
     let submitting = false;
@@ -100,86 +101,94 @@
 
     async function onRequestCredential() {
         if (!isValidForm) return;
+        loader.showLoader();
         submitting = true;
+        try {
+            const didDocument = await resolveDid(dataInput.issuer);
 
-        const didDocument = await resolveDid(dataInput.issuer);
-
-        if (!didDocument || !didDocument?.keyAgreement) {
-            console.error("didDocument is null");
-            submitting = false;
-            window.scrollTo({ top: 0, behavior: "smooth" });
-            return;
-        }
-
-        issuerPublicKey =
-            (didDocument?.keyAgreement[0] as any)?.publicKeyJwk?.x || "";
-
-        const requestMessage = await encrypt(issuerPublicKey, {
-            didReq: userDid,
-            pkReq: userPublicKey?.x,
-        });
-
-        const nonceRes = await API.post(dataInput.nonce_endpoint, {
-            msg: requestMessage,
-        });
-
-        if (nonceRes.error) {
-            errorMessage = nonceRes.error;
-            submitting = false;
-            window.scrollTo({ top: 0, behavior: "smooth" });
-            return;
-        }
-
-        const resMsg = nonceRes.resMsg;
-
-        const userPrivateKey = await loadPrivateKey(
-            userDid,
-            getPassword(userDid),
-        );
-        if (!userPrivateKey || !userPrivateKey.x || !userPrivateKey.d) {
-            throw new Error("Private key is invalid");
-        }
-        const decryptedMesage = await decrypt(
-            userPrivateKey.x,
-            userPrivateKey.d,
-            resMsg,
-        );
-
-        //send request
-        if (decryptedMesage.didReq == userDid) {
-            const signReq = await sign(
-                jsonToArrayBuffer({
-                    didReq: userDid,
-                    nonce: decryptedMesage.nonce,
-                }),
-                userPrivateKey,
-            );
-
-            const requestMessage = await encrypt(issuerPublicKey, {
-                didReq: userDid,
-                nonce: decryptedMesage.nonce,
-                signReq: arrBuftobase64u(signReq),
-            });
-
-            const vcRes = await API.post(dataInput.credential_endpoint, {
-                msg: requestMessage,
-            });
-
-            if (vcRes.error) {
-                errorMessage = vcRes.error;
+            if (!didDocument || !didDocument?.keyAgreement) {
+                console.error("didDocument is null");
                 submitting = false;
+                loader.hideLoader();
                 window.scrollTo({ top: 0, behavior: "smooth" });
                 return;
             }
 
-            const vc = vcRes.vc;
+            issuerPublicKey =
+                (didDocument?.keyAgreement[0] as any)?.publicKeyJwk?.x || "";
 
-            if (vc) {
-                await addOwnCredential(userDid, vc);
+            const requestMessage = await encrypt(issuerPublicKey, {
+                didReq: userDid,
+                pkReq: userPublicKey?.x,
+            });
+
+            const nonceRes = await API.post(dataInput.nonce_endpoint, {
+                msg: requestMessage,
+            });
+
+            if (nonceRes.error) {
+                errorMessage = nonceRes.error;
+                submitting = false;
+                loader.hideLoader();
+                window.scrollTo({ top: 0, behavior: "smooth" });
+                return;
             }
-        }
 
-        route = ROUTES.CREDENTIAL;
+            const resMsg = nonceRes.resMsg;
+
+            const userPrivateKey = await loadPrivateKey(
+                userDid,
+                getPassword(userDid),
+            );
+            if (!userPrivateKey || !userPrivateKey.x || !userPrivateKey.d) {
+                throw new Error("Private key is invalid");
+            }
+            const decryptedMesage = await decrypt(
+                userPrivateKey.x,
+                userPrivateKey.d,
+                resMsg,
+            );
+
+            //send request
+            if (decryptedMesage.didReq == userDid) {
+                const signReq = await sign(
+                    jsonToArrayBuffer({
+                        didReq: userDid,
+                        nonce: decryptedMesage.nonce,
+                    }),
+                    userPrivateKey,
+                );
+
+                const requestMessage = await encrypt(issuerPublicKey, {
+                    didReq: userDid,
+                    nonce: decryptedMesage.nonce,
+                    signReq: arrBuftobase64u(signReq),
+                });
+
+                const vcRes = await API.post(dataInput.credential_endpoint, {
+                    msg: requestMessage,
+                });
+
+                if (vcRes.error) {
+                    errorMessage = vcRes.error;
+                    submitting = false;
+                    loader.hideLoader();
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                    return;
+                }
+
+                const vc = vcRes.vc;
+
+                if (vc) {
+                    await addOwnCredential(userDid, vc);
+                }
+            }
+
+            route = ROUTES.CREDENTIAL;
+        } finally {
+            submitting = false;
+            loader.hideLoader();
+        }
     }
 
     init();

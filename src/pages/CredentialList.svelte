@@ -61,8 +61,6 @@
     } finally {
       loader.hideLoader();
     }
-
-    alert("Sucess");
   }
 </script>
 
