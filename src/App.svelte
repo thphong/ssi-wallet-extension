@@ -20,6 +20,7 @@
     isSessionValid,
     triggerRefreshSession,
   } from "./did-interfaces/session";
+  import Loader from "./components/loader/Loader.svelte";
 
   export let popupState: "login-flow" | "vc-flow" | "manual-click" | null;
 
@@ -61,6 +62,7 @@
 </script>
 
 <div class="wrap">
+  <Loader></Loader>
   <!-- Header -->
   {#if route != ROUTES.CREATE_USER_1 && route != ROUTES.CREATE_USER_2}
     <header class="header">

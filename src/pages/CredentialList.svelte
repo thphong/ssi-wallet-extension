@@ -11,6 +11,7 @@
     getRevokedIndexCredentials,
     setRevokedIndexCredentials,
   } from "../did-interfaces/credential";
+  import { loader } from "../components/loader/loader";
   export let credentials: any[] = [];
   export let selectedVCs: VC[] = [];
   export let needSelection = false;
@@ -47,14 +48,20 @@
   });
 
   async function revokeVC(index: number) {
-    let newDoc: any = await revokeVCFromIssuer(did, index, privateKey);
-    if (newDoc.doc) {
-      await saveDidDoc(did, newDoc.doc);
-    } else {
-      await saveDidDoc(did, newDoc);
+    loader.showLoader();
+    try {
+      let newDoc: any = await revokeVCFromIssuer(did, index, privateKey);
+      if (newDoc.doc) {
+        await saveDidDoc(did, newDoc.doc);
+      } else {
+        await saveDidDoc(did, newDoc);
+      }
+      await setRevokedIndexCredentials(did, index);
+      revokedIndex = await getRevokedIndexCredentials(did);
+    } finally {
+      loader.hideLoader();
     }
-    await setRevokedIndexCredentials(did, index);
-    revokedIndex = await getRevokedIndexCredentials(did);
+
     alert("Sucess");
   }
 </script>
