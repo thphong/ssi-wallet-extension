@@ -85,6 +85,10 @@ export async function getDidDoc(did: string): Promise<DidDocument | undefined> {
     return await dbInstance.getValue<DidDocument>(getKeyDidDoc(did));
 }
 
+export async function saveDidDoc(did: string, doc: DidDocument): Promise<void> {
+    await dbInstance.saveValue(getKeyDidDoc(did), doc);
+}
+
 async function getUsers(): Promise<UserInfo[]> {
 
     let users = await dbInstance.getValue<UserInfo[]>(KEY_LIST_USER);

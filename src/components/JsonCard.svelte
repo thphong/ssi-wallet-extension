@@ -10,6 +10,8 @@
     export let downloadFilename = "download.json";
     export let collapsedAt = 1;
     export let needSelection = false;
+    export let revokeHandler: any = null;
+    export let customClass: string = "";
 
     const dispatch = createEventDispatcher();
 
@@ -20,7 +22,7 @@
     }
 </script>
 
-<div class="card-box">
+<div class="card-box {customClass}">
     <div class="cred-header">
         {title}
     </div>
@@ -42,6 +44,14 @@
             >
                 <img src="/assets/download.png" alt="download" class="icon" />
             </button>
+            {#if revokeHandler}
+                <button
+                    class="icon-btn icon-btn-small"
+                    on:click={revokeHandler}
+                >
+                    <img src="/assets/undo.png" alt="Revoke" class="icon" />
+                </button>
+            {/if}
         {/if}
         {#if needSelection}
             <input
@@ -79,5 +89,9 @@
         color: #3a3a3b;
         display: grid;
         justify-content: space-between;
+    }
+
+    .revoke-vc {
+        background-color: antiquewhite;
     }
 </style>

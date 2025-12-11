@@ -76,7 +76,7 @@
     <div class="list-header margin--15">Credentials You Have</div>
     <CredentialList credentials={$listOwnCredentials} />
     <div class="list-header">Credentials You Issue</div>
-    <CredentialList credentials={$listDeliveryCredentials} />
+    <CredentialList credentials={$listDeliveryCredentials} needRevoke={true} />
   </section>
 {:else if route == ROUTES.CREDENTIAL_CREATE}
   <CredentialNew bind:route></CredentialNew>

@@ -12,6 +12,8 @@
   import {
     addDeliveryCredential,
     listOwnCredentials,
+    getCurrentIdexCredentials,
+    setCurrentIdexCredentials,
   } from "../did-interfaces/credential";
 
   export let route: string;
@@ -64,7 +66,11 @@
     if (!isValidForm) return;
     dataInput.credentialSubject = dataInput.jsonValue.json;
     submitting = true;
-    const pk = await loadPrivateKey(dataInput.issuer, getPassword(dataInput.issuer));
+    const pk = await loadPrivateKey(
+      dataInput.issuer,
+      getPassword(dataInput.issuer),
+    );
+    const currentIndex = await getCurrentIdexCredentials(dataInput.issuer);
 
     if (delegateVC.length > 0) {
       const { selected, ...parentVC } = delegateVC[0];
@@ -74,12 +80,15 @@
         dataInput.credentialSubject,
         pk,
         dataInput.expirationDate,
+        currentIndex,
       );
       await addDeliveryCredential(dataInput.issuer, delegatedVC);
     } else {
+      dataInput.revocationBitmapIndex = currentIndex;
       const vc = await createVC(dataInput, pk);
       await addDeliveryCredential(dataInput.issuer, vc);
     }
+    await setCurrentIdexCredentials(dataInput.issuer);
 
     route = ROUTES.CREDENTIAL;
   }

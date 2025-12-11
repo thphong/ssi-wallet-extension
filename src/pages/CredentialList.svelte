@@ -3,12 +3,21 @@
   import { type VC } from "did-core-sdk";
   import { shortenDid, formatDate } from "../libs/utils";
   import JsonCard from "../components/JsonCard.svelte";
+  import { loadPrivateKey } from "../did-interfaces/encrypt";
+  import { getPassword } from "../did-interfaces/session";
+  import { currentUser, saveDidDoc } from "../did-interfaces/users";
+  import { revokeVCFromIssuer } from "did-core-sdk";
+  import {
+    getRevokedIndexCredentials,
+    setRevokedIndexCredentials,
+  } from "../did-interfaces/credential";
   export let credentials: any[] = [];
   export let selectedVCs: VC[] = [];
   export let needSelection = false;
   export let singleSelection = false;
   export let maxIndex = 1;
   export let stepIndex = 2;
+  export let needRevoke = false;
   let oldSelectedVCs: VC[] = [];
 
   const dispatch = createEventDispatcher();
@@ -24,6 +33,29 @@
     credentials = credentials;
 
     dispatch("change", {});
+  }
+
+  let did = "";
+  let privateKey: JsonWebKey;
+  let revokedIndex: Set<number>;
+  currentUser.subscribe(async (user) => {
+    if (user) {
+      did = user.did;
+      privateKey = await loadPrivateKey(did, getPassword(did));
+      revokedIndex = await getRevokedIndexCredentials(did);
+    }
+  });
+
+  async function revokeVC(index: number) {
+    let newDoc: any = await revokeVCFromIssuer(did, index, privateKey);
+    if (newDoc.doc) {
+      await saveDidDoc(did, newDoc.doc);
+    } else {
+      await saveDidDoc(did, newDoc);
+    }
+    await setRevokedIndexCredentials(did, index);
+    revokedIndex = await getRevokedIndexCredentials(did);
+    alert("Sucess");
   }
 </script>
 
@@ -42,6 +74,17 @@
       {needSelection}
       bind:selected={cred.selected}
       on:change={onGetSelection}
+      revokeHandler={needRevoke &&
+      !revokedIndex?.has(cred.credentialStatus?.revocationBitmapIndex)
+        ? async () => {
+            revokeVC(cred.credentialStatus?.revocationBitmapIndex);
+          }
+        : null}
+      customClass={revokedIndex?.has(
+        cred.credentialStatus?.revocationBitmapIndex,
+      )
+        ? "revoke-vc"
+        : ""}
     >
       <span slot="custom-meta" class="custom-meta">
         <span>Issuer: {shortenDid(cred.issuer, 31)}</span>
