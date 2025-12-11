@@ -48,18 +48,20 @@
   });
 
   async function revokeVC(index: number) {
-    loader.showLoader();
-    try {
-      let newDoc: any = await revokeVCFromIssuer(did, index, privateKey);
-      if (newDoc.doc) {
-        await saveDidDoc(did, newDoc.doc);
-      } else {
-        await saveDidDoc(did, newDoc);
+    if (confirm("Do you want to revoke this VC?")) {
+      loader.showLoader();
+      try {
+        let newDoc: any = await revokeVCFromIssuer(did, index, privateKey);
+        if (newDoc.doc) {
+          await saveDidDoc(did, newDoc.doc);
+        } else {
+          await saveDidDoc(did, newDoc);
+        }
+        await setRevokedIndexCredentials(did, index);
+        revokedIndex = await getRevokedIndexCredentials(did);
+      } finally {
+        loader.hideLoader();
       }
-      await setRevokedIndexCredentials(did, index);
-      revokedIndex = await getRevokedIndexCredentials(did);
-    } finally {
-      loader.hideLoader();
     }
   }
 </script>
