@@ -32,6 +32,7 @@
 
   let selectedVCs: VC[] = [];
   let maxIndex = 3;
+  let issuerDid = "";
 
   let submitting = false;
   let errorMessage = "";
@@ -46,6 +47,13 @@
     });
   }
 
+  function showMessage(errMessage: string) {
+    errorMessage = errMessage;
+    submitting = false;
+    loader.hideLoader();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   async function handleLogin() {
     loader.showLoader();
     try {
@@ -53,14 +61,17 @@
 
       //Get api url from web
       const res: any = await loadPayload();
-      const issuer = res.payload.issuer;
+      const issuer = issuerDid || res.payload.issuer;
+      if (!issuerDid) {
+        issuerDid = res.payload.issuer;
+      }
 
       const didDocument = await resolveDid(issuer);
       let nonce_endpoint = "";
       let authorization_endpoint = "";
       if (didDocument) {
         const serviceVC: any = didDocument.service?.find(
-          (item) => item.type.indexOf("OpenID4VP") >= 0,
+          (item) => item.type.indexOf("OpenID4VP") >= 0
         )?.serviceEndpoint;
 
         nonce_endpoint =
@@ -75,11 +86,9 @@
       }
 
       if (!nonce_endpoint || !authorization_endpoint) {
-        errorMessage =
-          "Can't find end point to get access token in issuer's DID document";
-        submitting = false;
-        loader.hideLoader();
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        showMessage(
+          "Can't find end point to get access token in issuer's DID document"
+        );
         return;
       }
 
@@ -112,17 +121,14 @@
       });
 
       if (nonceRes.error) {
-        errorMessage = nonceRes.error;
-        submitting = false;
-        loader.hideLoader();
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        showMessage(nonceRes.error);
         return;
       }
 
       const resMsg = nonceRes.resMsg;
       const userPrivateKey = await loadPrivateKey(
         didSubject,
-        getPassword(didSubject),
+        getPassword(didSubject)
       );
       if (!userPrivateKey || !userPrivateKey.x || !userPrivateKey.d) {
         throw new Error("Private key is invalid");
@@ -130,13 +136,13 @@
       const decryptedMesage = await decrypt(
         userPrivateKey.x,
         userPrivateKey.d,
-        resMsg,
+        resMsg
       );
       const vp = await createVP(
         [vc],
         didSubject,
         userPrivateKey,
-        decryptedMesage.nonce,
+        decryptedMesage.nonce
       );
       const encryptedVP = await encrypt(issuerPublicKey.x, { vp: vp });
 
@@ -145,10 +151,7 @@
       });
 
       if (accesTokenRes.error) {
-        errorMessage = accesTokenRes.error;
-        submitting = false;
-        loader.hideLoader();
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        showMessage(accesTokenRes.error);
         return;
       }
 
@@ -159,14 +162,12 @@
 
       // Đóng popup sau khi login xong (cửa sổ popup)
       window.close();
-    } catch (error) {
-      console.error(error);
-      submitting = false;
-      loader.hideLoader();
-      chrome.runtime.sendMessage({
-        type: WALLET_REQUEST_TYPE.LOGIN_FAILED,
-        error: error,
-      });
+    } catch (error: any) {
+      showMessage(error.message);
+      // chrome.runtime.sendMessage({
+      //   type: WALLET_REQUEST_TYPE.LOGIN_FAILED,
+      //   error: error,
+      // });
     }
   }
 </script>
