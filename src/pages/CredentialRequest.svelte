@@ -1,246 +1,278 @@
 <script lang="ts">
-    import PageHeader from "../components/PageHeader.svelte";
-    import TextInput from "../components/TextInput.svelte";
-    import { ROUTES } from "../types/enums";
-    import API from "../api/Interceptor";
-    import {
-        encrypt,
-        decrypt,
-        sign,
-        jsonToArrayBuffer,
-        resolveDid,
-        arrBuftobase64u,
-    } from "did-core-sdk";
-    import { currentUser, getPublicKey } from "../did-interfaces/users";
-    import { loadPrivateKey } from "../did-interfaces/encrypt";
-    import { addOwnCredential } from "../did-interfaces/credential";
-    import { getPassword } from "../did-interfaces/session";
-    import { loader } from "../components/loader/loader";
+  import PageHeader from "../components/PageHeader.svelte";
+  import TextInput from "../components/TextInput.svelte";
+  import { ROUTES } from "../types/enums";
+  import API from "../api/Interceptor";
+  import {
+    encrypt,
+    decrypt,
+    sign,
+    jsonToArrayBuffer,
+    resolveDid,
+    arrBuftobase64u,
+    verifyVC,
+  } from "did-core-sdk";
+  import { currentUser, getPublicKey } from "../did-interfaces/users";
+  import { loadPrivateKey } from "../did-interfaces/encrypt";
+  import { addOwnCredential } from "../did-interfaces/credential";
+  import { getPassword } from "../did-interfaces/session";
+  import { loader } from "../components/loader/loader";
 
-    export let route: string;
-    let submitting = false;
-    let IsValidDid = true;
-    let userDid: string;
-    let userPublicKey: JsonWebKey | undefined;
-    let issuerPublicKey = "";
-    let hasInitValue = false;
+  export let route: string;
+  let submitting = false;
+  let IsValidDid = true;
+  let IsCheckingdDid = true;
+  let userDid: string;
+  let userPublicKey: JsonWebKey | undefined;
+  let issuerPublicKey = "";
+  let hasInitValue = false;
 
-    let dataInput: any = {
-        issuer: "",
-        nonce_endpoint: "",
-        credential_endpoint: "",
-    };
+  let dataInput: any = {
+    issuer: "",
+    nonce_endpoint: "",
+    credential_endpoint: "",
+  };
 
-    let errorMessage = "";
+  let errorMessage = "";
 
-    currentUser.subscribe(async (user) => {
-        if (user) {
-            userDid = user.did;
-            userPublicKey = await getPublicKey(user.did);
-        }
+  currentUser.subscribe(async (user) => {
+    if (user) {
+      userDid = user.did;
+      userPublicKey = await getPublicKey(user.did);
+    }
+  });
+
+  $: isValidForm =
+    dataInput.issuer.trim().length > 0 &&
+    IsValidDid &&
+    dataInput.nonce_endpoint.trim().length > 0 &&
+    dataInput.credential_endpoint.trim().length > 0;
+
+  async function onCheckDid() {
+    if (!dataInput.issuer) {
+      IsValidDid = false;
+      return;
+    }
+    try {
+      IsCheckingdDid = true;
+      const res = await resolveDid(dataInput.issuer);
+      if (res && res?.verificationMethod) {
+        issuerPublicKey = res?.verificationMethod[0]?.publicKeyJwk?.x || "";
+        IsValidDid = true;
+
+        const serviceVC: any = res.service?.find(
+          (item) => item.type.indexOf("OpenID4VCI") >= 0
+        )?.serviceEndpoint;
+
+        dataInput.nonce_endpoint =
+          serviceVC?.nonce_endpoint && serviceVC?.nonce_endpoint.length > 0
+            ? serviceVC?.nonce_endpoint[0]
+            : "";
+        dataInput.credential_endpoint =
+          serviceVC?.credential_endpoint &&
+          serviceVC?.credential_endpoint.length > 0
+            ? serviceVC?.credential_endpoint[0]
+            : "";
+      } else {
+        IsValidDid = false;
+        dataInput.nonce_endpoint = "";
+        dataInput.credential_endpoint = "";
+      }
+    } catch {
+      IsValidDid = false;
+      dataInput.nonce_endpoint = "";
+      dataInput.credential_endpoint = "";
+    } finally {
+      IsCheckingdDid = false;
+    }
+  }
+
+  async function loadPayload() {
+    return new Promise((resolve) => {
+      chrome.runtime.sendMessage("popup_get_payload", (res) => {
+        resolve(res);
+      });
     });
+  }
 
-    $: isValidForm =
-        dataInput.issuer.trim().length > 0 &&
-        IsValidDid &&
-        dataInput.nonce_endpoint.trim().length > 0 &&
-        dataInput.credential_endpoint.trim().length > 0;
-
-    async function onCheckDid() {
-        if (!dataInput.issuer) {
-            IsValidDid = false;
-            return;
-        }
-        try {
-            const res = await resolveDid(dataInput.issuer);
-            if (res && res?.verificationMethod) {
-                issuerPublicKey =
-                    res?.verificationMethod[0]?.publicKeyJwk?.x || "";
-                IsValidDid = true;
-
-                const serviceVC: any = res.service?.find(
-                    (item) => item.type.indexOf("OpenID4VCI") >= 0,
-                )?.serviceEndpoint;
-
-                dataInput.nonce_endpoint =
-                    serviceVC?.nonce_endpoint &&
-                    serviceVC?.nonce_endpoint.length > 0
-                        ? serviceVC?.nonce_endpoint[0]
-                        : "";
-                dataInput.credential_endpoint =
-                    serviceVC?.credential_endpoint &&
-                    serviceVC?.credential_endpoint.length > 0
-                        ? serviceVC?.credential_endpoint[0]
-                        : "";
-            } else {
-                IsValidDid = false;
-            }
-        } catch {
-            IsValidDid = false;
-        }
+  async function init() {
+    //Get api url from web
+    const res: any = await loadPayload();
+    const payload = res?.payload;
+    if (payload) {
+      dataInput.issuer = payload.issuer;
+      hasInitValue = true;
+      await onCheckDid();
     }
+  }
 
-    async function loadPayload() {
-        return new Promise((resolve) => {
-            chrome.runtime.sendMessage("popup_get_payload", (res) => {
-                resolve(res);
-            });
+  function showMessage(errMessage: string) {
+    errorMessage = errMessage;
+    submitting = false;
+    loader.hideLoader();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function onRequestCredential() {
+    if (!isValidForm) return;
+    loader.showLoader();
+    submitting = true;
+    try {
+      const didDocument = await resolveDid(dataInput.issuer);
+
+      if (!didDocument || !didDocument?.keyAgreement) {
+        showMessage("DID document is null");
+        return;
+      }
+
+      issuerPublicKey =
+        (didDocument?.keyAgreement[0] as any)?.publicKeyJwk?.x || "";
+
+      const requestMessage = await encrypt(issuerPublicKey, {
+        didReq: userDid,
+        pkReq: userPublicKey?.x,
+      });
+
+      const nonceRes = await API.post(dataInput.nonce_endpoint, {
+        msg: requestMessage,
+      });
+
+      if (nonceRes.error) {
+        showMessage(nonceRes.error);
+        return;
+      }
+
+      const resMsg = nonceRes.resMsg;
+
+      const userPrivateKey = await loadPrivateKey(
+        userDid,
+        getPassword(userDid)
+      );
+      if (!userPrivateKey || !userPrivateKey.x || !userPrivateKey.d) {
+        throw new Error("Private key is invalid");
+      }
+      const decryptedMesage = await decrypt(
+        userPrivateKey.x,
+        userPrivateKey.d,
+        resMsg
+      );
+
+      //send request
+      if (decryptedMesage.didReq == userDid) {
+        const signReq = await sign(
+          jsonToArrayBuffer({
+            didReq: userDid,
+            nonce: decryptedMesage.nonce,
+          }),
+          userPrivateKey
+        );
+
+        const requestMessage = await encrypt(issuerPublicKey, {
+          didReq: userDid,
+          nonce: decryptedMesage.nonce,
+          signReq: arrBuftobase64u(signReq),
         });
-    }
 
-    async function init() {
-        //Get api url from web
-        const res: any = await loadPayload();
-        const payload = res?.payload;
-        if (payload) {
-            dataInput.issuer = payload.issuer;
-            hasInitValue = true;
-            await onCheckDid();
+        const vcRes = await API.post(dataInput.credential_endpoint, {
+          msg: requestMessage,
+        });
+
+        if (vcRes.error) {
+          showMessage(vcRes.error);
+          return;
         }
-    }
 
-    async function onRequestCredential() {
-        if (!isValidForm) return;
-        loader.showLoader();
-        submitting = true;
+        const vc = vcRes.vc;
+
+        if (vc && vc.issuer != dataInput.issuer) {
+          showMessage("Issuer in VC is not valid.");
+          return;
+        }
+
+        if (vc && vc.subject != userDid) {
+          showMessage("subject in VC is not holder.");
+          return;
+        }
+
         try {
-            const didDocument = await resolveDid(dataInput.issuer);
-
-            if (!didDocument || !didDocument?.keyAgreement) {
-                console.error("didDocument is null");
-                submitting = false;
-                loader.hideLoader();
-                window.scrollTo({ top: 0, behavior: "smooth" });
-                return;
-            }
-
-            issuerPublicKey =
-                (didDocument?.keyAgreement[0] as any)?.publicKeyJwk?.x || "";
-
-            const requestMessage = await encrypt(issuerPublicKey, {
-                didReq: userDid,
-                pkReq: userPublicKey?.x,
-            });
-
-            const nonceRes = await API.post(dataInput.nonce_endpoint, {
-                msg: requestMessage,
-            });
-
-            if (nonceRes.error) {
-                errorMessage = nonceRes.error;
-                submitting = false;
-                loader.hideLoader();
-                window.scrollTo({ top: 0, behavior: "smooth" });
-                return;
-            }
-
-            const resMsg = nonceRes.resMsg;
-
-            const userPrivateKey = await loadPrivateKey(
-                userDid,
-                getPassword(userDid),
-            );
-            if (!userPrivateKey || !userPrivateKey.x || !userPrivateKey.d) {
-                throw new Error("Private key is invalid");
-            }
-            const decryptedMesage = await decrypt(
-                userPrivateKey.x,
-                userPrivateKey.d,
-                resMsg,
-            );
-
-            //send request
-            if (decryptedMesage.didReq == userDid) {
-                const signReq = await sign(
-                    jsonToArrayBuffer({
-                        didReq: userDid,
-                        nonce: decryptedMesage.nonce,
-                    }),
-                    userPrivateKey,
-                );
-
-                const requestMessage = await encrypt(issuerPublicKey, {
-                    didReq: userDid,
-                    nonce: decryptedMesage.nonce,
-                    signReq: arrBuftobase64u(signReq),
-                });
-
-                const vcRes = await API.post(dataInput.credential_endpoint, {
-                    msg: requestMessage,
-                });
-
-                if (vcRes.error) {
-                    errorMessage = vcRes.error;
-                    submitting = false;
-                    loader.hideLoader();
-                    window.scrollTo({ top: 0, behavior: "smooth" });
-                    return;
-                }
-
-                const vc = vcRes.vc;
-
-                if (vc) {
-                    await addOwnCredential(userDid, vc);
-                }
-            }
-
-            route = ROUTES.CREDENTIAL;
-        } finally {
-            submitting = false;
-            loader.hideLoader();
+          const isValidVC = await verifyVC(vc);
+          if (!isValidVC) {
+            showMessage("VC is not valid");
+            return;
+          }
+        } catch (error: any) {
+          showMessage(error.message);
+          return;
         }
-    }
 
-    init();
+        if (vc) {
+          await addOwnCredential(userDid, vc);
+        }
+      }
+
+      route = ROUTES.CREDENTIAL;
+    } finally {
+      submitting = false;
+      loader.hideLoader();
+    }
+  }
+
+  init();
 </script>
 
 <PageHeader
-    bind:route
-    routeBack={ROUTES.CREDENTIAL}
-    pageTitle="Request Credential"
+  bind:route
+  routeBack={ROUTES.CREDENTIAL}
+  pageTitle="Request Credential"
 ></PageHeader>
 <div>
-    {#if errorMessage}
-        <div class="error-message">
-            {errorMessage}
-        </div>
-    {/if}
-    <TextInput
-        bind:value={dataInput.issuer}
-        label={"Issuer"}
-        sublabel={"DID of the credential issuer"}
-        placeholder={"Enter Issuer"}
-        readonlyCon={submitting || hasInitValue}
-        on:change={onCheckDid}
-        errorMessage={!IsValidDid ? "did is not valid, can't resolve" : ""}
-    ></TextInput>
-    <TextInput
-        value={dataInput.nonce_endpoint}
-        label={"Nonce URL"}
-        sublabel={"Url to get nonce for vc issuance"}
-        type={"info"}
-        errorMessage={dataInput.nonce_endpoint == "" && dataInput.issuer
-            ? "can't find nonce endpoint in DID document"
-            : ""}
-    ></TextInput>
-    <TextInput
-        bind:value={dataInput.credential_endpoint}
-        label={"VC Request URL"}
-        sublabel={"Url to get VC"}
-        type={"info"}
-        errorMessage={dataInput.credential_endpoint == "" && dataInput.issuer
-            ? "can't find request vc endpoint in DID document"
-            : ""}
-    ></TextInput>
-    <div class="form-buttons">
-        <button
-            class="primary"
-            disabled={!isValidForm || submitting}
-            on:click={onRequestCredential}
-        >
-            {submitting ? "Request…" : "Finish"}
-        </button>
+  {#if errorMessage}
+    <div class="error-message">
+      {errorMessage}
     </div>
+  {/if}
+  <TextInput
+    bind:value={dataInput.issuer}
+    label={"Issuer"}
+    sublabel={"DID of the credential issuer"}
+    placeholder={"Enter Issuer"}
+    readonlyCon={submitting || hasInitValue}
+    on:change={onCheckDid}
+    errorMessage={!IsValidDid ? "did is not valid, can't resolve" : ""}
+  ></TextInput>
+  <TextInput
+    value={dataInput.nonce_endpoint}
+    label={"Nonce URL"}
+    sublabel={"Url to get nonce for vc issuance"}
+    type={"info"}
+    errorMessage={dataInput.nonce_endpoint == "" &&
+    dataInput.issuer &&
+    IsValidDid &&
+    !IsCheckingdDid
+      ? "can't find nonce endpoint in DID document"
+      : ""}
+  ></TextInput>
+  <TextInput
+    bind:value={dataInput.credential_endpoint}
+    label={"VC Request URL"}
+    sublabel={"Url to get VC"}
+    type={"info"}
+    errorMessage={dataInput.credential_endpoint == "" &&
+    dataInput.issuer &&
+    IsValidDid &&
+    !IsCheckingdDid
+      ? "can't find request vc endpoint in DID document"
+      : ""}
+  ></TextInput>
+  <div class="form-buttons">
+    <button
+      class="primary"
+      disabled={!isValidForm || submitting}
+      on:click={onRequestCredential}
+    >
+      {submitting ? "Request…" : "Finish"}
+    </button>
+  </div>
 </div>
 
 <style>

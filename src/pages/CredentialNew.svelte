@@ -39,6 +39,7 @@
 
   let submitting = false;
   let IsValidDid = true;
+  let errorMessage = "";
 
   $: isValidForm =
     dataInput.subject.trim().length > 0 &&
@@ -63,6 +64,13 @@
     }
   }
 
+  function showMessage(errMessage: string) {
+    errorMessage = errMessage;
+    submitting = false;
+    loader.hideLoader();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   async function onCreateCredential() {
     if (!isValidForm) return;
     loader.showLoader();
@@ -71,7 +79,7 @@
       submitting = true;
       const pk = await loadPrivateKey(
         dataInput.issuer,
-        getPassword(dataInput.issuer),
+        getPassword(dataInput.issuer)
       );
       const currentIndex = await getCurrentIdexCredentials(dataInput.issuer);
 
@@ -83,7 +91,7 @@
           dataInput.credentialSubject,
           pk,
           dataInput.expirationDate,
-          currentIndex,
+          currentIndex
         );
         await addDeliveryCredential(dataInput.issuer, delegatedVC);
       } else {
@@ -94,6 +102,8 @@
       await setCurrentIdexCredentials(dataInput.issuer);
 
       route = ROUTES.CREDENTIAL;
+    } catch (error: any) {
+      showMessage(error.message);
     } finally {
       submitting = false;
       loader.hideLoader();
@@ -113,6 +123,11 @@
 <PageHeader bind:route routeBack={ROUTES.CREDENTIAL} pageTitle="New Credential"
 ></PageHeader>
 <div>
+  {#if errorMessage}
+    <div class="error-message">
+      {errorMessage}
+    </div>
+  {/if}
   <TextInput
     bind:value={dataInput.subject}
     label={"Subject"}
