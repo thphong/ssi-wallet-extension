@@ -61,6 +61,10 @@ body {
     .icon-btn.expand-icon {
         display: none;
     }
+
+    /* .wrap {
+        min-height: 100vh !important;
+    } */
 }
 
 

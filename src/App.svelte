@@ -295,7 +295,9 @@
     position: relative;
     left: 0;
     right: 0;
-    bottom: 0;
+    bottom: 0;    
+    /* position: absolute;
+    bottom: 15px; */
     padding-top: 16px;
     display: grid;
     grid-template-columns: repeat(5, 1fr);
