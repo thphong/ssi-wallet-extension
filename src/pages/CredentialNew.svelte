@@ -12,6 +12,7 @@
   import {
     addDeliveryCredential,
     listOwnCredentials,
+    addOwnCredential,
     getCurrentIdexCredentials,
     setCurrentIdexCredentials,
   } from "../did-interfaces/credential";
@@ -94,10 +95,12 @@
           currentIndex
         );
         await addDeliveryCredential(dataInput.issuer, delegatedVC);
+        await addOwnCredential(dataInput.subject, delegatedVC);      
       } else {
         dataInput.revocationBitmapIndex = currentIndex;
         const vc = await createVC(dataInput, pk);
         await addDeliveryCredential(dataInput.issuer, vc);
+        await addOwnCredential(dataInput.subject, vc);        
       }
       await setCurrentIdexCredentials(dataInput.issuer);
 
